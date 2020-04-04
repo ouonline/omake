@@ -8,7 +8,7 @@ ifeq ($(debug), y)
 else
 	CXXFLAGS := -O2 -DNDEBUG
 endif
-CXXFLAGS := $(CXXFLAGS) -Wall -Werror -Wextra -fPIC
+CXXFLAGS := $(CXXFLAGS) -fPIC -Wall -Werror -Wextra
 
 TARGET := omake
 
@@ -18,9 +18,12 @@ all: $(TARGET)
 
 omake_OBJS := ./project.cpp.omake.o ./target.cpp.omake.o ./misc.cpp.omake.o ./main.cpp.omake.o
 
-omake_INCLUDE := -I.. -I../lua-cpp/../../../lua
+omake_INCLUDE := -I.. -I../../../lua
 
-omake_LIBS := ../lua-cpp/libluacpp.a ../text-utils/libtext_utils.a ../lua-cpp/../../../lua/src/liblua.a -ldl -lm
+omake_LIBS := ../lua-cpp/libluacpp.a \
+ ../text-utils/libtext_utils.a \
+ ../../../lua/src/liblua.a \
+ -ldl -lm
 
 ./project.cpp.omake.o: ./project.cpp
 	$(CXX) $(CXXFLAGS) $(omake_INCLUDE) -c $< -o $@
@@ -41,7 +44,6 @@ $(omake_OBJS): | omake_pre_process
 omake_pre_process:
 	$(MAKE) debug=$(debug) -C ../lua-cpp
 	$(MAKE) debug=$(debug) -C ../text-utils
-	$(MAKE) debug=$(debug) -C ../lua-cpp/../../../lua/src
 
 omake: $(omake_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(omake_LIBS)

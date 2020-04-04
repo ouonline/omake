@@ -18,11 +18,50 @@ using namespace std;
 using namespace utils;
 using namespace luacpp;
 
+static string RemoveDotAndDotDot(const string& path) {
+    vector<string> path_stack;
+
+    TextSplit(path.data(), path.size(), "/", 1, [&path_stack] (const char* s, unsigned int l) -> bool {
+        if (l == 0) {
+            return true;
+        }
+        if (path_stack.empty()) {
+            path_stack.emplace_back(string(s, l));
+        } else {
+            if (l == 1 && s[0] == '.') {
+                return true;
+            } else if (l == 2 && s[0] == '.' && s[1] == '.') {
+                if (path_stack.back() == "..") {
+                    path_stack.push_back(string(s, l));
+                } else if (path_stack.back() == ".") {
+                    path_stack.back() = string(s, l);
+                } else {
+                    path_stack.pop_back();
+                }
+                return true;
+            } else {
+                path_stack.emplace_back(string(s, l));
+            }
+        }
+        return true;
+    });
+
+    if (path_stack.empty()) {
+        return string();
+    }
+
+    string new_path = path_stack[0];
+    for (size_t i = 1; i < path_stack.size(); ++i) {
+        new_path.append("/" + path_stack[i]);
+    }
+    return new_path;
+}
+
 void Target::AddDynamicLibrary(const char* path, const char* name) {
     char abs_path[PATH_MAX];
     realpath(path, abs_path);
 
-    LibInfo info(path, name, abs_path);
+    LibInfo info(RemoveDotAndDotDot(path).c_str(), name, abs_path);
     for (auto lib : m_dynamic_libs) {
         if (lib.abs_path == info.abs_path && lib.name == info.name) {
             return;
@@ -35,7 +74,7 @@ void Target::AddStaticLibrary(const char* path, const char* name) {
     char abs_path[PATH_MAX];
     realpath(path, abs_path);
 
-    LibInfo info(path, name, abs_path);
+    LibInfo info(RemoveDotAndDotDot(path).c_str(), name, abs_path);
     for (auto lib : m_static_libs) {
         if (lib.abs_path == info.abs_path && lib.name == info.name) {
             return;
@@ -51,7 +90,7 @@ void Target::AddSystemDynamicLibrary(const char* name) {
             return;
         }
     }
-    m_sys_libs.emplace_back(s);
+    m_sys_libs.emplace_back(RemoveDotAndDotDot(s));
 }
 
 void Target::AddIncludeDirectory(const char* name) {
@@ -61,7 +100,7 @@ void Target::AddIncludeDirectory(const char* name) {
             return;
         }
     }
-    m_inc_dirs.emplace_back(s);
+    m_inc_dirs.emplace_back(RemoveDotAndDotDot(s));
 }
 
 static void FindFileEndsWith(const string& dirname, const char* suffix,
@@ -233,7 +272,7 @@ bool Target::Finalize() {
                     if (it.path[0] == '/') {
                         AddStaticLibrary(it.path.c_str(), it.name.c_str());
                     } else {
-                        tmp_lib_info.path = lib.path + "/" + it.path;
+                        tmp_lib_info.path = RemoveDotAndDotDot(lib.path + "/" + it.path);
                         AddStaticLibrary(tmp_lib_info.path.c_str(), it.name.c_str());
                     }
                     q.push(tmp_lib_info);
@@ -247,7 +286,7 @@ bool Target::Finalize() {
                     if (it.path[0] == '/') {
                         AddDynamicLibrary(it.path.c_str(), it.name.c_str());
                     } else {
-                        tmp_lib_info.path = lib.path + "/" + it.path;
+                        tmp_lib_info.path = RemoveDotAndDotDot(lib.path + "/" + it.path);
                         AddDynamicLibrary(tmp_lib_info.path.c_str(), it.name.c_str());
                     }
                     q.push(tmp_lib_info);
