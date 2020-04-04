@@ -55,9 +55,9 @@ bool Project::GenerateMakefile(const string& fname) {
         }
     }
 
+    content += "AR := ar\n";
     if (has_c) {
         content += "CC := gcc\n"
-            "AR := ar\n"
             "\n"
             "ifeq ($(debug), y)\n"
             "\tCFLAGS := -g\n"
@@ -69,7 +69,6 @@ bool Project::GenerateMakefile(const string& fname) {
     }
     if (has_cpp) {
         content += "CXX := g++\n"
-            "AR := ar\n"
             "\n"
             "ifeq ($(debug), y)\n"
             "\tCXXFLAGS := -g\n"

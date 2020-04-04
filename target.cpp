@@ -172,32 +172,27 @@ const string Target::GetLibClause() const {
 
 bool Target::Finalize() {
     queue<LibInfo> q;
-    set<string> user_libs_dedup;
-    set<string> sys_libs_dedup;
+    set<pair<string, string>> user_libs_dedup;
 
     for (auto lib : m_static_libs) {
-        auto ret_pair = user_libs_dedup.insert(lib.abs_path);
+        auto ret_pair = user_libs_dedup.insert(make_pair(lib.abs_path, lib.name));
         if (ret_pair.second) {
             q.push(lib);
         }
     }
 
     for (auto lib : m_dynamic_libs) {
-        auto ret_pair = user_libs_dedup.insert(lib.abs_path);
+        auto ret_pair = user_libs_dedup.insert(make_pair(lib.abs_path, lib.name));
         if (ret_pair.second) {
             q.push(lib);
         }
-    }
-
-    for (auto lib : m_sys_libs) {
-        sys_libs_dedup.insert(lib);
     }
 
     while (!q.empty()) {
         auto lib = q.front();
         q.pop();
 
-        const string omake_file = lib.abs_path + "/omake.lua";
+        const string omake_file = lib.path + "/omake.lua";
         if (access(omake_file.c_str(), F_OK) != 0) {
             continue;
         }
@@ -206,7 +201,7 @@ bool Target::Finalize() {
         InitLuaEnv(&l);
 
         string errmsg;
-        bool ok = l.dofile(omake_file.c_str(), &errmsg, 1, [this, &lib, &q, &user_libs_dedup, &sys_libs_dedup] (int, const LuaObject& obj) -> bool {
+        bool ok = l.dofile(omake_file.c_str(), &errmsg, 1, [this, &lib, &q, &user_libs_dedup] (int, const LuaObject& obj) -> bool {
             auto project = obj.touserdata().object<Project>();
             auto target = project->GetTarget(lib.name);
             if (!target) {
@@ -214,26 +209,35 @@ bool Target::Finalize() {
             }
 
             for (auto it : target->GetStaticLibraries()) {
-                auto ret_pair = user_libs_dedup.insert(it.abs_path);
+                auto ret_pair = user_libs_dedup.insert(make_pair(it.abs_path, it.name));
                 if (ret_pair.second) {
-                    AddStaticLibrary(it.path.c_str(), it.name.c_str());
-                    q.push(it);
+                    auto tmp_lib_info = it;
+                    if (it.path[0] == '/') {
+                        AddStaticLibrary(it.path.c_str(), it.name.c_str());
+                    } else {
+                        tmp_lib_info.path = lib.path + "/" + it.path;
+                        AddStaticLibrary(tmp_lib_info.path.c_str(), it.name.c_str());
+                    }
+                    q.push(tmp_lib_info);
                 }
             }
 
             for (auto it : target->GetDynamicLibraries()) {
-                auto ret_pair = user_libs_dedup.insert(it.abs_path);
+                auto ret_pair = user_libs_dedup.insert(make_pair(it.abs_path, it.name));
                 if (ret_pair.second) {
-                    AddDynamicLibrary(it.path.c_str(), it.name.c_str());
-                    q.push(it);
+                    auto tmp_lib_info = it;
+                    if (it.path[0] == '/') {
+                        AddDynamicLibrary(it.path.c_str(), it.name.c_str());
+                    } else {
+                        tmp_lib_info.path = lib.path + "/" + it.path;
+                        AddDynamicLibrary(tmp_lib_info.path.c_str(), it.name.c_str());
+                    }
+                    q.push(tmp_lib_info);
                 }
             }
 
             for (auto it : target->GetSystemDynamicLibraries()) {
-                auto ret_pair = sys_libs_dedup.insert(it);
-                if (ret_pair.second) {
-                    AddSystemDynamicLibrary(it.c_str());
-                }
+                AddSystemDynamicLibrary(it.c_str());
             }
 
             return true;
@@ -269,5 +273,9 @@ void LibraryTarget::ForeachTargetAndCommand(
     const function<void (const string& target,
                          const string& command)>& f) const {
     f("lib" + m_name + ".a", "$(AR) rc $@ $^");
-    f("lib" + m_name + ".so", "$(CXX) -shared -o $@ $^ $(" + m_name + "_LIBS)");
+    if (m_cpp_sources.empty()) {
+        f("lib" + m_name + ".so", "$(CC) -shared -o $@ $^ $(" + m_name + "_LIBS)");
+    } else {
+        f("lib" + m_name + ".so", "$(CXX) -shared -o $@ $^ $(" + m_name + "_LIBS)");
+    }
 }
