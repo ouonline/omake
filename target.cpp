@@ -54,6 +54,16 @@ void Target::AddSystemDynamicLibrary(const char* name) {
     m_sys_libs.emplace_back(s);
 }
 
+void Target::AddIncludeDirectory(const char* name) {
+    const string s(name);
+    for (auto lib : m_inc_dirs) {
+        if (lib == s) {
+            return;
+        }
+    }
+    m_inc_dirs.emplace_back(s);
+}
+
 static void FindFileEndsWith(const string& dirname, const char* suffix,
                                std::vector<std::string>* file_list) {
     DIR* dirp = opendir(dirname.c_str());
@@ -135,9 +145,16 @@ static string GetParentDir(const string& path) {
 }
 
 const string Target::GetIncludeClause() const {
+    string content;
     set<string> dedup;
 
-    string content;
+    for (auto inc : m_inc_dirs) {
+        auto ret_pair = dedup.insert(inc);
+        if (ret_pair.second) {
+            content += " -I" + inc;
+        }
+    }
+
     for (auto lib : m_static_libs) {
         auto tmp_path = GetParentDir(lib.path);
         auto ret_pair = dedup.insert(tmp_path);
@@ -145,6 +162,7 @@ const string Target::GetIncludeClause() const {
             content += " -I" + tmp_path;
         }
     }
+
     for (auto lib : m_dynamic_libs) {
         auto tmp_path = GetParentDir(lib.path);
         auto ret_pair = dedup.insert(tmp_path);
@@ -159,10 +177,10 @@ const string Target::GetIncludeClause() const {
 const string Target::GetLibClause() const {
     string content;
     for (auto lib : m_static_libs) {
-        content += " " + lib.path + "/lib" + lib.name + ".a";
+        content += " " + lib.path + "/lib" + lib.name + ".a \\\n";
     }
     for (auto lib : m_dynamic_libs) {
-        content += " -L" + lib.path + " -l" + lib.name;
+        content += " -L" + lib.path + " -l" + lib.name + " \\\n";
     }
     for (auto lib : m_sys_libs) {
         content += " -l" + lib;
@@ -240,6 +258,14 @@ bool Target::Finalize() {
                 AddSystemDynamicLibrary(it.c_str());
             }
 
+            for (auto dirpath : target->GetIncludeDirectories()) {
+                if (dirpath[0] == '/') {
+                    AddIncludeDirectory(dirpath.c_str());
+                } else {
+                    AddIncludeDirectory((lib.path + "/" + dirpath).c_str());
+                }
+            }
+
             return true;
         });
         if (!ok) {
@@ -273,9 +299,11 @@ void LibraryTarget::ForeachTargetAndCommand(
     const function<void (const string& target,
                          const string& command)>& f) const {
     f("lib" + m_name + ".a", "$(AR) rc $@ $^");
+#if 0
     if (m_cpp_sources.empty()) {
         f("lib" + m_name + ".so", "$(CC) -shared -o $@ $^ $(" + m_name + "_LIBS)");
     } else {
         f("lib" + m_name + ".so", "$(CXX) -shared -o $@ $^ $(" + m_name + "_LIBS)");
     }
+#endif
 }

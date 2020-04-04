@@ -1,6 +1,8 @@
 #include "project.h"
 #include <iostream>
 #include <fstream>
+#include <set>
+#include <unistd.h>
 using namespace std;
 
 Target* Project::CreateBinary(const char* name) {
@@ -36,6 +38,10 @@ static bool WriteFile(const string& fname, const string& content) {
     return true;
 }
 
+static bool HasOMake(const string& dir) {
+    return (access((dir + "/omake.lua").c_str(), F_OK) == 0);
+}
+
 bool Project::GenerateMakefile(const string& fname) {
     for (auto target : m_targets) {
         if (!target->Finalize()) {
@@ -64,7 +70,7 @@ bool Project::GenerateMakefile(const string& fname) {
             "else\n"
             "\tCFLAGS := -O2 -DNDEBUG\n"
             "endif\n"
-            "CFLAGS := $(CFLAGS) -Wall -Werror -Wextra -fPIC\n"
+            "CFLAGS := $(CFLAGS) -fPIC -Wall -Werror -Wextra\n"
             "\n";
     }
     if (has_cpp) {
@@ -75,7 +81,7 @@ bool Project::GenerateMakefile(const string& fname) {
             "else\n"
             "\tCXXFLAGS := -O2 -DNDEBUG\n"
             "endif\n"
-            "CXXFLAGS := $(CXXFLAGS) -Wall -Werror -Wextra -fPIC\n"
+            "CXXFLAGS := $(CXXFLAGS) -fPIC -Wall -Werror -Wextra\n"
             "\n";
     }
 
@@ -129,15 +135,32 @@ bool Project::GenerateMakefile(const string& fname) {
         auto& dynamic_libs = target->GetDynamicLibraries();
 
         if ((!static_libs.empty()) || (!dynamic_libs.empty())) {
+            set<string> dedup;
             const string pre_process_name = target->GetName() + "_pre_process";
             content += ".PHONY: " + pre_process_name + "\n\n";
             content += "$(" + obj_name + "): | " + pre_process_name + "\n\n" +
                 pre_process_name + ":\n";
             for (auto lib : static_libs) {
-                content += "\t$(MAKE) debug=$(debug) -C " + lib.path + "\n";
+                auto ret_pair = dedup.insert(lib.path);
+                if (lib.path == "." || lib.path == "./") {
+                    continue;
+                }
+                if (ret_pair.second) {
+                    if (HasOMake(lib.path)) {
+                        content += "\t$(MAKE) debug=$(debug) -C " + lib.path + "\n";
+                    }
+                }
             }
             for (auto lib : dynamic_libs) {
-                content += "\t$(MAKE) debug=$(debug) -C " + lib.path + "\n";
+                auto ret_pair = dedup.insert(lib.path);
+                if (lib.path == "." || lib.path == "./") {
+                    continue;
+                }
+                if (ret_pair.second) {
+                    if (HasOMake(lib.path)) {
+                        content += "\t$(MAKE) debug=$(debug) -C " + lib.path + "\n";
+                    }
+                }
             }
             content += "\n";
         }

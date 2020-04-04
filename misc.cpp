@@ -16,6 +16,15 @@ static int l_AddSystemDynamicLibraries(lua_State* l) {
     return 0;
 }
 
+static int l_AddIncludeDirectories(lua_State* l) {
+    int argc = lua_gettop(l);
+    auto target = (Target**)lua_touserdata(l, 1);
+    for (int i = 2; i <= argc; ++i) {
+        (*target)->AddIncludeDirectory(lua_tostring(l, i));
+    }
+    return 0;
+}
+
 void InitLuaEnv(LuaState* l) {
     l->newfunction(CreateProject, "CreateProject");
 
@@ -27,5 +36,6 @@ void InitLuaEnv(LuaState* l) {
         .set("AddSourceFile", &Target::AddSourceFile)
         .set("AddStaticLibrary", &Target::AddStaticLibrary)
         .set("AddDynamicLibrary", &Target::AddDynamicLibrary)
+        .set("AddIncludeDirectories", l_AddIncludeDirectories)
         .set("AddSystemDynamicLibraries", l_AddSystemDynamicLibraries);
 }

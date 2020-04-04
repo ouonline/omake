@@ -24,6 +24,7 @@ public:
     void AddDynamicLibrary(const char* path, const char* name);
     void AddStaticLibrary(const char* path, const char* name);
     void AddSystemDynamicLibrary(const char* name);
+    void AddIncludeDirectory(const char* path);
 
     bool Finalize();
 
@@ -42,6 +43,7 @@ public:
     const std::vector<LibInfo>& GetStaticLibraries() const { return m_static_libs; }
     const std::vector<LibInfo>& GetDynamicLibraries() const { return m_dynamic_libs; }
     const std::vector<std::string>& GetSystemDynamicLibraries() const { return m_sys_libs; }
+    const std::vector<std::string>& GetIncludeDirectories() const { return m_inc_dirs; }
 
 protected:
     const std::string m_name;
@@ -50,6 +52,7 @@ protected:
     std::vector<LibInfo> m_dynamic_libs;
     std::vector<LibInfo> m_static_libs;
     std::vector<std::string> m_sys_libs;
+    std::vector<std::string> m_inc_dirs;
 };
 
 class BinaryTarget final : public Target {
