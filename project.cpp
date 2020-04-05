@@ -42,6 +42,66 @@ static bool HasOMake(const string& dir) {
     return (access((dir + "/omake.lua").c_str(), F_OK) == 0);
 }
 
+struct DepInfo {
+    DepInfo(const string& _path, const string& _name, const string& _label)
+        : path(_path), name(_name), label(_label) {}
+    string path;
+    string name;
+    string label;
+};
+
+static inline void InsertDepInfo(const string& path, const string& name,
+                                 const string& label, vector<DepInfo>* deplibs) {
+    for (auto lib : *deplibs) {
+        if (path == lib.path && name == lib.name) {
+            return;
+        }
+    }
+
+    deplibs->emplace_back(DepInfo(path, name, label));
+}
+
+static const DepInfo* FindDepInfo(const vector<DepInfo>& deplibs, const string& path,
+                                  const string& name) {
+    for (size_t i = 0; i < deplibs.size(); ++i) {
+        const DepInfo& lib = deplibs[i];
+        if (path == lib.path && name == lib.name) {
+            return &lib;
+        }
+    }
+    return nullptr;
+}
+
+static void GenerateDeplibLabel(const Target* target, vector<DepInfo>* deplibs) {
+    const vector<LibInfo>& static_libs = target->GetStaticLibraries();
+    const vector<LibInfo>& dynamic_libs = target->GetDynamicLibraries();
+    if (static_libs.empty() && dynamic_libs.empty()) {
+        return;
+    }
+
+    const string dep_prefix = "__omake_dep__";
+
+    for (auto lib : static_libs) {
+        if (!HasOMake(lib.path)) {
+            continue;
+        }
+
+        const string dep_label = dep_prefix + std::to_string(deplibs->size());
+        const string dep_name = "lib" + lib.name + ".a";
+        InsertDepInfo(lib.path, dep_name, dep_label, deplibs);
+    }
+
+    for (auto lib : dynamic_libs) {
+        if (!HasOMake(lib.path)) {
+            continue;
+        }
+
+        const string dep_label = dep_prefix + std::to_string(deplibs->size());
+        const string dep_name = "lib" + lib.name + ".so";
+        InsertDepInfo(lib.path, dep_name, dep_label, deplibs);
+    }
+}
+
 bool Project::GenerateMakefile(const string& fname) {
     for (auto target : m_targets) {
         if (!target->Finalize()) {
@@ -87,9 +147,7 @@ bool Project::GenerateMakefile(const string& fname) {
 
     content += "TARGET :=";
     for (auto target : m_targets) {
-        target->ForeachTargetAndCommand([&content] (const string& name, const string&) {
-            content += " " + name;
-        });
+        content += " " + target->GetGeneratedName();
     }
     content += "\n\n";
 
@@ -97,6 +155,24 @@ bool Project::GenerateMakefile(const string& fname) {
         "\n"
         "all: $(TARGET)\n"
         "\n";
+
+    // pre process for dependencies
+    vector<DepInfo> deplibs;
+    for (auto target : m_targets) {
+        GenerateDeplibLabel(target, &deplibs);
+    }
+    if (!deplibs.empty()) {
+        content += ".PHONY:";
+        for (auto it : deplibs) {
+            content += " " + it.label;
+        }
+        content += "\n\n";
+
+        for (auto it : deplibs) {
+            content += it.label + ":\n" +
+                "\t$(MAKE) debug=$(debug) " + it.name + " -C " + it.path + "\n\n";
+        }
+    }
 
     for (auto target : m_targets) {
         vector<pair<string, string>> target_cpp_obj_files;
@@ -130,47 +206,33 @@ bool Project::GenerateMakefile(const string& fname) {
             content += obj.first + ": " + obj.second + "\n" +
                 "\t$(CC) $(CFLAGS) $(" + target->GetName() + "_INCLUDE) -c $< -o $@\n\n";
         }
-
-        auto& static_libs = target->GetStaticLibraries();
-        auto& dynamic_libs = target->GetDynamicLibraries();
-
-        if ((!static_libs.empty()) || (!dynamic_libs.empty())) {
-            set<string> dedup;
-            const string pre_process_name = target->GetName() + "_pre_process";
-            content += ".PHONY: " + pre_process_name + "\n\n";
-            content += "$(" + obj_name + "): | " + pre_process_name + "\n\n" +
-                pre_process_name + ":\n";
-            for (auto lib : static_libs) {
-                auto ret_pair = dedup.insert(lib.path);
-                if (lib.path == "." || lib.path == "./") {
-                    continue;
-                }
-                if (ret_pair.second) {
-                    if (HasOMake(lib.path)) {
-                        content += "\t$(MAKE) debug=$(debug) -C " + lib.path + "\n";
-                    }
-                }
-            }
-            for (auto lib : dynamic_libs) {
-                auto ret_pair = dedup.insert(lib.path);
-                if (lib.path == "." || lib.path == "./") {
-                    continue;
-                }
-                if (ret_pair.second) {
-                    if (HasOMake(lib.path)) {
-                        content += "\t$(MAKE) debug=$(debug) -C " + lib.path + "\n";
-                    }
-                }
-            }
-            content += "\n";
-        }
     }
 
     for (auto target : m_targets) {
-        target->ForeachTargetAndCommand([&content, &target] (const string& name, const string& cmd) {
-            content += name + ": $(" + target->GetName() + "_OBJS)\n" +
-                "\t" + cmd + "\n\n";
-        });
+        content += target->GetGeneratedName() + ": $(" + target->GetName() + "_OBJS)";
+
+        if ((!target->GetStaticLibraries().empty()) || (!target->GetDynamicLibraries().empty())) {
+            content += " |";
+        }
+
+        for (auto lib : target->GetStaticLibraries()) {
+            const string& dep_name = "lib" + lib.name + ".a";
+            auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
+            if (dep_info) {
+                content += " " + dep_info->label;
+            }
+        }
+
+        for (auto lib : target->GetDynamicLibraries()) {
+            const string& dep_name = "lib" + lib.name + ".so";
+            auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
+            if (dep_info) {
+                content += " " + dep_info->label;
+            }
+        }
+
+        content += "\n"
+            "\t" + target->GetGeneratedCommand() + "\n\n";
     }
 
     content += "clean:\n"

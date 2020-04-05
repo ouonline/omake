@@ -10,8 +10,6 @@
 
 #include <sys/types.h>
 #include <dirent.h>
-#include <limits.h> // PATH_MAX
-#include <stdlib.h> // realpath()
 #include <unistd.h> // access()
 
 using namespace std;
@@ -35,6 +33,8 @@ static string RemoveDotAndDotDot(const string& path) {
                     path_stack.push_back(string(s, l));
                 } else if (path_stack.back() == ".") {
                     path_stack.back() = string(s, l);
+                } else if (path_stack.size() == 1 && path_stack[0] == "/") {
+                    return true;
                 } else {
                     path_stack.pop_back();
                 }
@@ -58,12 +58,9 @@ static string RemoveDotAndDotDot(const string& path) {
 }
 
 void Target::AddDynamicLibrary(const char* path, const char* name) {
-    char abs_path[PATH_MAX];
-    realpath(path, abs_path);
-
-    LibInfo info(RemoveDotAndDotDot(path).c_str(), name, abs_path);
+    LibInfo info(RemoveDotAndDotDot(path).c_str(), name);
     for (auto lib : m_dynamic_libs) {
-        if (lib.abs_path == info.abs_path && lib.name == info.name) {
+        if (lib.path == info.path && lib.name == info.name) {
             return;
          }
     }
@@ -71,12 +68,9 @@ void Target::AddDynamicLibrary(const char* path, const char* name) {
 }
 
 void Target::AddStaticLibrary(const char* path, const char* name) {
-    char abs_path[PATH_MAX];
-    realpath(path, abs_path);
-
-    LibInfo info(RemoveDotAndDotDot(path).c_str(), name, abs_path);
+    LibInfo info(RemoveDotAndDotDot(path).c_str(), name);
     for (auto lib : m_static_libs) {
-        if (lib.abs_path == info.abs_path && lib.name == info.name) {
+        if (lib.path == info.path && lib.name == info.name) {
             return;
         }
     }
@@ -215,15 +209,27 @@ const string Target::GetIncludeClause() const {
 
 const string Target::GetLibClause() const {
     string content;
-    for (auto lib : m_static_libs) {
-        content += " " + lib.path + "/lib" + lib.name + ".a \\\n";
+
+    for (size_t i = 0; i < m_static_libs.size(); ++i) {
+        const LibInfo& lib = m_static_libs[i];
+        content += " " + lib.path + "/lib" + lib.name + ".a";
+        if (i < m_static_libs.size() - 1) {
+            content += " \\\n";
+        }
     }
-    for (auto lib : m_dynamic_libs) {
-        content += " -L" + lib.path + " -l" + lib.name + " \\\n";
+
+    for (size_t i = 0; i < m_dynamic_libs.size(); ++i) {
+        const LibInfo& lib = m_dynamic_libs[i];
+        content += " -L" + lib.path + " -l" + lib.name;
+        if (i < m_dynamic_libs.size() - 1) {
+            content += " \\\n";
+        }
     }
+
     for (auto lib : m_sys_libs) {
         content += " -l" + lib;
     }
+
     return content;
 }
 
@@ -232,14 +238,14 @@ bool Target::Finalize() {
     set<pair<string, string>> user_libs_dedup;
 
     for (auto lib : m_static_libs) {
-        auto ret_pair = user_libs_dedup.insert(make_pair(lib.abs_path, lib.name));
+        auto ret_pair = user_libs_dedup.insert(make_pair(lib.path, lib.name));
         if (ret_pair.second) {
             q.push(lib);
         }
     }
 
     for (auto lib : m_dynamic_libs) {
-        auto ret_pair = user_libs_dedup.insert(make_pair(lib.abs_path, lib.name));
+        auto ret_pair = user_libs_dedup.insert(make_pair(lib.path, lib.name));
         if (ret_pair.second) {
             q.push(lib);
         }
@@ -266,7 +272,7 @@ bool Target::Finalize() {
             }
 
             for (auto it : target->GetStaticLibraries()) {
-                auto ret_pair = user_libs_dedup.insert(make_pair(it.abs_path, it.name));
+                auto ret_pair = user_libs_dedup.insert(make_pair(it.path, it.name));
                 if (ret_pair.second) {
                     auto tmp_lib_info = it;
                     if (it.path[0] == '/') {
@@ -280,7 +286,7 @@ bool Target::Finalize() {
             }
 
             for (auto it : target->GetDynamicLibraries()) {
-                auto ret_pair = user_libs_dedup.insert(make_pair(it.abs_path, it.name));
+                auto ret_pair = user_libs_dedup.insert(make_pair(it.path, it.name));
                 if (ret_pair.second) {
                     auto tmp_lib_info = it;
                     if (it.path[0] == '/') {
@@ -319,30 +325,26 @@ bool Target::Finalize() {
 
 /* -------------------------------------------------------------------------- */
 
-void BinaryTarget::ForeachTargetAndCommand(
-    const function<void (const string& target,
-                         const string& command)>& f) const {
+string BinaryTarget::GetGeneratedName() const {
+    return m_name;
+}
+
+string BinaryTarget::GetGeneratedCommand() const {
     string cmd;
     if (m_cpp_sources.empty()) {
         cmd = "$(CC) $(CFLAGS) -o $@ $^ $(" + m_name + "_LIBS)";
     } else {
         cmd = "$(CXX) $(CXXFLAGS) -o $@ $^ $(" + m_name + "_LIBS)";
     }
-
-    f(m_name, cmd);
+    return cmd;
 }
 
 /* -------------------------------------------------------------------------- */
 
-void LibraryTarget::ForeachTargetAndCommand(
-    const function<void (const string& target,
-                         const string& command)>& f) const {
-    f("lib" + m_name + ".a", "$(AR) rc $@ $^");
-#if 0
-    if (m_cpp_sources.empty()) {
-        f("lib" + m_name + ".so", "$(CC) -shared -o $@ $^ $(" + m_name + "_LIBS)");
-    } else {
-        f("lib" + m_name + ".so", "$(CXX) -shared -o $@ $^ $(" + m_name + "_LIBS)");
-    }
-#endif
+string LibraryTarget::GetGeneratedName() const {
+    return "lib" + m_name + ".a";
+}
+
+string LibraryTarget::GetGeneratedCommand() const {
+    return "$(AR) rc $@ $^";
 }

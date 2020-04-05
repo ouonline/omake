@@ -7,11 +7,10 @@
 #include <functional>
 
 struct LibInfo {
-    LibInfo(const char* _path, const char* _name, const char* _abs_path)
-        : path(_path), name(_name), abs_path(_abs_path) {}
+    LibInfo(const char* _path, const char* _name)
+        : path(_path), name(_name) {}
     std::string path;
     std::string name;
-    std::string abs_path;
 };
 
 class Target {
@@ -30,9 +29,8 @@ public:
 
     const std::string& GetName() const { return m_name; }
 
-    virtual void ForeachTargetAndCommand(
-        const std::function<void (const std::string& target,
-                                  const std::string& command)>&) const = 0;
+    virtual std::string GetGeneratedName() const = 0;
+    virtual std::string GetGeneratedCommand() const = 0;
 
     const std::string GetIncludeClause() const;
     const std::string GetLibClause() const;
@@ -59,17 +57,16 @@ class BinaryTarget final : public Target {
 public:
     BinaryTarget(const char* name) : Target(name) {}
 
-    void ForeachTargetAndCommand(
-        const std::function<void (const std::string& target,
-                                  const std::string& command)>&) const override;
+    std::string GetGeneratedName() const override;
+    std::string GetGeneratedCommand() const override;
 };
 
 class LibraryTarget final : public Target {
 public:
     LibraryTarget(const char* name) : Target(name) {}
-    void ForeachTargetAndCommand(
-        const std::function<void (const std::string& target,
-                                  const std::string& command)>&) const override;
+
+    std::string GetGeneratedName() const override;
+    std::string GetGeneratedCommand() const override;
 };
 
 #endif
