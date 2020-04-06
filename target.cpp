@@ -325,26 +325,34 @@ bool Target::Finalize() {
 
 /* -------------------------------------------------------------------------- */
 
-string BinaryTarget::GetGeneratedName() const {
-    return m_name;
-}
-
-string BinaryTarget::GetGeneratedCommand() const {
+void BinaryTarget::ForeachGeneratedNameAndCommand(
+    const function<void (const string&, const string&)>& func) const {
     string cmd;
     if (m_cpp_sources.empty()) {
         cmd = "$(CC) $(CFLAGS) -o $@ $^ $(" + m_name + "_LIBS)";
     } else {
         cmd = "$(CXX) $(CXXFLAGS) -o $@ $^ $(" + m_name + "_LIBS)";
     }
-    return cmd;
+    func(m_name, cmd);
 }
 
 /* -------------------------------------------------------------------------- */
 
-string LibraryTarget::GetGeneratedName() const {
-    return "lib" + m_name + ".a";
-}
+LibraryTarget::LibraryTarget(const char* name, int type)
+    : Target(name), m_type(type) {}
 
-string LibraryTarget::GetGeneratedCommand() const {
-    return "$(AR) rc $@ $^";
+void LibraryTarget::ForeachGeneratedNameAndCommand(
+    const function<void (const string&, const string&)>& func) const {
+    if (m_type & LIBRARY_TYPE_STATIC) {
+        func("lib" + m_name + ".a", "$(AR) rc $@ $^");
+    }
+    if (m_type & LIBRARY_TYPE_SHARED) {
+        string cmd;
+        if (m_cpp_sources.empty()) {
+            cmd = "$(CC) -shared -o $@ $^ $(" + m_name + "_LIBS)";
+        } else {
+            cmd = "$(CXX) -shared -o $@ $^ $(" + m_name + "_LIBS)";
+        }
+        func("lib" + m_name + ".so", cmd);
+    }
 }

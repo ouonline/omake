@@ -11,8 +11,13 @@ Target* Project::CreateBinary(const char* name) {
     return t;
 }
 
-Target* Project::CreateLibrary(const char* name) {
-    auto t = new LibraryTarget(name);
+Target* Project::CreateLibrary(const char* name, int type) {
+    if ((!(type & LIBRARY_TYPE_SHARED)) && (!(type & LIBRARY_TYPE_STATIC))) {
+        cerr << "CreateLibrary() MUST specify `STATIC` or `SHARED`" << endl;
+        return nullptr;
+    }
+
+    auto t = new LibraryTarget(name, type);
     m_targets.push_back(t);
     return t;
 }
@@ -130,7 +135,7 @@ bool Project::GenerateMakefile(const string& fname) {
             "else\n"
             "\tCFLAGS := -O2 -DNDEBUG\n"
             "endif\n"
-            "CFLAGS := $(CFLAGS) -fPIC -Wall -Werror -Wextra\n"
+            "CFLAGS := $(CFLAGS) -Wall -Werror -Wextra -fPIC\n"
             "\n";
     }
     if (has_cpp) {
@@ -141,13 +146,16 @@ bool Project::GenerateMakefile(const string& fname) {
             "else\n"
             "\tCXXFLAGS := -O2 -DNDEBUG\n"
             "endif\n"
-            "CXXFLAGS := $(CXXFLAGS) -fPIC -Wall -Werror -Wextra\n"
+            "CXXFLAGS := $(CXXFLAGS) -Wall -Werror -Wextra -fPIC\n"
             "\n";
     }
 
     content += "TARGET :=";
     for (auto target : m_targets) {
-        content += " " + target->GetGeneratedName();
+        target->ForeachGeneratedNameAndCommand(
+            [&content] (const string& name, const string&) {
+                content += " " + name;
+            });
     }
     content += "\n\n";
 
@@ -209,30 +217,32 @@ bool Project::GenerateMakefile(const string& fname) {
     }
 
     for (auto target : m_targets) {
-        content += target->GetGeneratedName() + ": $(" + target->GetName() + "_OBJS)";
+        target->ForeachGeneratedNameAndCommand([&target, &deplibs, &content] (const string& name, const string& cmd) {
+            content += name + ": $(" + target->GetName() + "_OBJS)";
 
-        if ((!target->GetStaticLibraries().empty()) || (!target->GetDynamicLibraries().empty())) {
-            content += " |";
-        }
-
-        for (auto lib : target->GetStaticLibraries()) {
-            const string& dep_name = "lib" + lib.name + ".a";
-            auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
-            if (dep_info) {
-                content += " " + dep_info->label;
+            if ((!target->GetStaticLibraries().empty()) || (!target->GetDynamicLibraries().empty())) {
+                content += " |";
             }
-        }
 
-        for (auto lib : target->GetDynamicLibraries()) {
-            const string& dep_name = "lib" + lib.name + ".so";
-            auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
-            if (dep_info) {
-                content += " " + dep_info->label;
+            for (auto lib : target->GetStaticLibraries()) {
+                const string& dep_name = "lib" + lib.name + ".a";
+                auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
+                if (dep_info) {
+                    content += " " + dep_info->label;
+                }
             }
-        }
 
-        content += "\n"
-            "\t" + target->GetGeneratedCommand() + "\n\n";
+            for (auto lib : target->GetDynamicLibraries()) {
+                const string& dep_name = "lib" + lib.name + ".so";
+                auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
+                if (dep_info) {
+                    content += " " + dep_info->label;
+                }
+            }
+
+            content += "\n"
+                "\t" + cmd + "\n\n";
+        });
     }
 
     content += "clean:\n"

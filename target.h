@@ -19,7 +19,6 @@ public:
     virtual ~Target() {}
 
     void AddSourceFile(const char* file);
-
     void AddDynamicLibrary(const char* path, const char* name);
     void AddStaticLibrary(const char* path, const char* name);
     void AddSystemDynamicLibrary(const char* name);
@@ -29,15 +28,14 @@ public:
 
     const std::string& GetName() const { return m_name; }
 
-    virtual std::string GetGeneratedName() const = 0;
-    virtual std::string GetGeneratedCommand() const = 0;
+    virtual void ForeachGeneratedNameAndCommand(
+        const std::function<void (const std::string&, const std::string&)>& func) const = 0;
 
     const std::string GetIncludeClause() const;
     const std::string GetLibClause() const;
 
     const std::vector<std::string>& GetCSources() const { return m_c_sources; }
     const std::vector<std::string>& GetCppSources() const { return m_cpp_sources; }
-
     const std::vector<LibInfo>& GetStaticLibraries() const { return m_static_libs; }
     const std::vector<LibInfo>& GetDynamicLibraries() const { return m_dynamic_libs; }
     const std::vector<std::string>& GetSystemDynamicLibraries() const { return m_sys_libs; }
@@ -57,16 +55,22 @@ class BinaryTarget final : public Target {
 public:
     BinaryTarget(const char* name) : Target(name) {}
 
-    std::string GetGeneratedName() const override;
-    std::string GetGeneratedCommand() const override;
+    void ForeachGeneratedNameAndCommand(
+        const std::function<void (const std::string&, const std::string&)>& func) const override;
 };
+
+#define LIBRARY_TYPE_STATIC 1
+#define LIBRARY_TYPE_SHARED 2
 
 class LibraryTarget final : public Target {
 public:
-    LibraryTarget(const char* name) : Target(name) {}
+    LibraryTarget(const char* name, int type);
 
-    std::string GetGeneratedName() const override;
-    std::string GetGeneratedCommand() const override;
+    void ForeachGeneratedNameAndCommand(
+        const std::function<void (const std::string&, const std::string&)>& func) const override;
+
+private:
+    int m_type;
 };
 
 #endif

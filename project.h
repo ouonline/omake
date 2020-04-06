@@ -6,7 +6,7 @@
 class Project final {
 public:
     Target* CreateBinary(const char* name);
-    Target* CreateLibrary(const char* name);
+    Target* CreateLibrary(const char* name, int type);
     Target* GetTarget(const std::string& name) const;
     bool GenerateMakefile(const std::string& fname);
 

@@ -28,6 +28,9 @@ static int l_AddIncludeDirectories(lua_State* l) {
 void InitLuaEnv(LuaState* l) {
     l->newfunction(CreateProject, "CreateProject");
 
+    l->set("STATIC", LIBRARY_TYPE_STATIC);
+    l->set("SHARED", LIBRARY_TYPE_SHARED);
+
     l->newclass<Project>("Project")
         .set("CreateBinary", &Project::CreateBinary)
         .set("CreateLibrary", &Project::CreateLibrary);
