@@ -1,9 +1,9 @@
 project = CreateProject()
 
 omake = project:CreateBinary("omake")
-omake:AddSourceFile("*.cpp")
-omake:AddStaticLibrary("../lua-cpp", "luacpp")
-omake:AddStaticLibrary("../text-utils", "text_utils")
-omake:AddSystemDynamicLibraries("dl", "m")
+omake:AddSourceFiles("*.cpp")
+omake:AddLibrary("../lua-cpp", "luacpp", STATIC)
+omake:AddLibrary("../text-utils", "text_utils", STATIC)
+omake:AddSysLibraries("dl", "m")
 
 return project

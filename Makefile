@@ -8,7 +8,7 @@ ifeq ($(debug), y)
 else
 	CXXFLAGS := -O2 -DNDEBUG
 endif
-CXXFLAGS := $(CXXFLAGS) -fPIC -Wall -Werror -Wextra
+CXXFLAGS := $(CXXFLAGS) -Wall -Werror -Wextra -fPIC
 
 TARGET := omake
 
@@ -16,35 +16,33 @@ TARGET := omake
 
 all: $(TARGET)
 
-.PHONY: __omake_dep__0 __omake_dep__1
+.PHONY: __omake_dep__2 __omake_dep__1
 
-__omake_dep__0:
-	$(MAKE) debug=$(debug) libluacpp.a -C ../lua-cpp
-
-__omake_dep__1:
+__omake_dep__2:
 	$(MAKE) debug=$(debug) libtext_utils.a -C ../text-utils
 
-omake_OBJS := ./project.cpp.omake.o ./target.cpp.omake.o ./misc.cpp.omake.o ./main.cpp.omake.o
+__omake_dep__1:
+	$(MAKE) debug=$(debug) libluacpp.a -C ../lua-cpp
+
+omake_OBJS := project.cpp.omake.o target.cpp.omake.o misc.cpp.omake.o main.cpp.omake.o
 
 omake_INCLUDE := -I.. -I../../../lua
 
-omake_LIBS := ../lua-cpp/libluacpp.a \
- ../text-utils/libtext_utils.a \
- ../../../lua/src/liblua.a -ldl -lm
+omake_LIBS := ../lua-cpp/libluacpp.a ../text-utils/libtext_utils.a ../../../lua/src/liblua.a -ldl -lm
 
-./project.cpp.omake.o: ./project.cpp
+project.cpp.omake.o: project.cpp
 	$(CXX) $(CXXFLAGS) $(omake_INCLUDE) -c $< -o $@
 
-./target.cpp.omake.o: ./target.cpp
+target.cpp.omake.o: target.cpp
 	$(CXX) $(CXXFLAGS) $(omake_INCLUDE) -c $< -o $@
 
-./misc.cpp.omake.o: ./misc.cpp
+misc.cpp.omake.o: misc.cpp
 	$(CXX) $(CXXFLAGS) $(omake_INCLUDE) -c $< -o $@
 
-./main.cpp.omake.o: ./main.cpp
+main.cpp.omake.o: main.cpp
 	$(CXX) $(CXXFLAGS) $(omake_INCLUDE) -c $< -o $@
 
-omake: $(omake_OBJS) | __omake_dep__0 __omake_dep__1
+omake: $(omake_OBJS) | __omake_dep__1 __omake_dep__2
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(omake_LIBS)
 
 clean:

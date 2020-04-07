@@ -1,9 +1,16 @@
 #include "project.h"
+#include "misc.h"
 #include <iostream>
 #include <fstream>
 #include <set>
-#include <unistd.h>
+#include <unordered_map>
+#include <list>
+#include <algorithm> // std::sort
+#include <unistd.h> // access()
 using namespace std;
+
+#include "lua-cpp/luacpp.h"
+using namespace luacpp;
 
 Target* Project::CreateBinary(const char* name) {
     auto t = new BinaryTarget(name);
@@ -13,7 +20,7 @@ Target* Project::CreateBinary(const char* name) {
 
 Target* Project::CreateLibrary(const char* name, int type) {
     if ((!(type & LIBRARY_TYPE_SHARED)) && (!(type & LIBRARY_TYPE_STATIC))) {
-        cerr << "CreateLibrary() MUST specify `STATIC` or `SHARED`" << endl;
+        cerr << "CreateLibrary() MUST specify at least one of `STATIC` and `SHARED`." << endl;
         return nullptr;
     }
 
@@ -43,77 +50,257 @@ static bool WriteFile(const string& fname, const string& content) {
     return true;
 }
 
-static bool HasOMake(const string& dir) {
-    return (access((dir + "/omake.lua").c_str(), F_OK) == 0);
-}
-
-struct DepInfo {
-    DepInfo(const string& _path, const string& _name, const string& _label)
-        : path(_path), name(_name), label(_label) {}
-    string path;
-    string name;
+struct DepTreeNode {
+    DepTreeNode(const string& _path, const string& _name, int _lib_type)
+        : info(_path, _name, _lib_type), level(0) {}
+    LibInfo info;
+    int level;
     string label;
+    list<DepTreeNode*> dep_list;
+    vector<string> inc_dirs;
 };
 
-static inline void InsertDepInfo(const string& path, const string& name,
-                                 const string& label, vector<DepInfo>* deplibs) {
-    for (auto lib : *deplibs) {
-        if (path == lib.path && name == lib.name) {
-            return;
-        }
+struct LibInfoHash final {
+    uint64_t operator () (const LibInfo& info) const {
+        return std::hash<string>()(info.path) +
+            std::hash<string>()(info.name) +
+            info.type;
     }
+};
 
-    deplibs->emplace_back(DepInfo(path, name, label));
+static inline bool HasOMake(const string& dirname) {
+    return (access((dirname + "/omake.lua").c_str(), F_OK) == 0);
 }
 
-static const DepInfo* FindDepInfo(const vector<DepInfo>& deplibs, const string& path,
-                                  const string& name) {
-    for (size_t i = 0; i < deplibs.size(); ++i) {
-        const DepInfo& lib = deplibs[i];
-        if (path == lib.path && name == lib.name) {
-            return &lib;
-        }
-    }
-    return nullptr;
-}
-
-static void GenerateDeplibLabel(const Target* target, vector<DepInfo>* deplibs) {
-    const vector<LibInfo>& static_libs = target->GetStaticLibraries();
-    const vector<LibInfo>& dynamic_libs = target->GetDynamicLibraries();
-    if (static_libs.empty() && dynamic_libs.empty()) {
+static void GenerateDepTree(const Target* target,
+                            unordered_map<LibInfo, DepTreeNode, LibInfoHash>* dep_tree) {
+    const vector<LibInfo>& libs = target->GetLibraries();
+    if (libs.empty()) {
         return;
     }
 
+    list<DepTreeNode*> q;
     const string dep_prefix = "__omake_dep__";
 
-    for (auto lib : static_libs) {
-        if (!HasOMake(lib.path)) {
-            continue;
+    for (auto lib : libs) {
+        DepTreeNode node(lib.path, lib.name, lib.type);
+        auto ret_pair = dep_tree->insert(make_pair(node.info, node));
+        if (ret_pair.second) {
+            if (HasOMake(lib.path)) {
+                ret_pair.first->second.label = dep_prefix + std::to_string(dep_tree->size());
+                q.push_back(&(ret_pair.first->second));
+            }
         }
-
-        const string dep_label = dep_prefix + std::to_string(deplibs->size());
-        const string dep_name = "lib" + lib.name + ".a";
-        InsertDepInfo(lib.path, dep_name, dep_label, deplibs);
     }
 
-    for (auto lib : dynamic_libs) {
-        if (!HasOMake(lib.path)) {
-            continue;
-        }
+    while (!q.empty()) {
+        auto dep = q.front();
+        q.pop_front();
 
-        const string dep_label = dep_prefix + std::to_string(deplibs->size());
-        const string dep_name = "lib" + lib.name + ".so";
-        InsertDepInfo(lib.path, dep_name, dep_label, deplibs);
+        // stop parsing dep_list if `omake.lua` is not found
+        const string omake_file = dep->info.path + "/omake.lua";
+
+        LuaState l;
+        InitLuaEnv(&l);
+
+        string errmsg;
+        bool ok = l.dofile(omake_file.c_str(), &errmsg, 1, [&dep, &q, &dep_prefix, &dep_tree] (int, const LuaObject& obj) -> bool {
+            auto project = obj.touserdata().object<Project>();
+            auto target = project->GetTarget(dep->info.name);
+            if (!target) {
+                return true;
+            }
+
+            for (auto it : target->GetLibraries()) {
+                string new_path;
+                if ((!it.path.empty()) && it.path[0] != '/') {
+                    new_path = RemoveDotAndDotDot(dep->info.path + "/" + it.path);
+                } else {
+                    new_path = it.path;
+                }
+
+                const DepTreeNode dep_node(new_path, it.name, it.type);
+                auto ret_pair = dep_tree->insert(make_pair(dep_node.info, dep_node));
+                if (ret_pair.second) {
+                    ret_pair.first->second.level = dep->level + 1;
+                    if (HasOMake(dep_node.info.path)) {
+                        ret_pair.first->second.label = dep_prefix + std::to_string(dep_tree->size());
+                        q.push_back(&(ret_pair.first->second));
+                    }
+                } else {
+                    int level = dep->level + 1;
+                    if (level > ret_pair.first->second.level) { // deeper level
+                        ret_pair.first->second.level = level;
+                    }
+                }
+                dep->dep_list.push_back(&(ret_pair.first->second));
+            }
+
+            for (auto dirpath : target->GetIncludeDirectories()) {
+                if (dirpath[0] == '/') {
+                    dep->inc_dirs.push_back(dirpath);
+                } else {
+                    dep->inc_dirs.push_back(RemoveDotAndDotDot(dep->info.path + "/" + dirpath));
+                }
+            }
+
+            return true;
+        });
+        if (!ok) {
+            cerr << "Preprocessing dependency[" << omake_file << "] failed: "
+                 << errmsg << endl;
+        }
     }
 }
 
-bool Project::GenerateMakefile(const string& fname) {
-    for (auto target : m_targets) {
-        if (!target->Finalize()) {
-            return false;
+static string GetParentDir(const string& path) {
+    if (path == ".." || path == "../") {
+        return "../..";
+    }
+    if (path == "." || path == "./") {
+        return "..";
+    }
+
+    for (int i = path.size() - 1; i >= 0; --i) {
+        if (path[i] == '/') {
+            if (i > 0) {
+                --i;
+            }
+            return path.substr(0, i + 1);
+        }
+    }
+    return path;
+}
+
+static bool DepExists(const vector<const DepTreeNode*>& dep_list, const LibInfo& info) {
+    for (auto it = dep_list.begin(); it != dep_list.end(); ++it) {
+        const DepTreeNode* node = *it;
+        if (node->info == info) {
+            return true;
         }
     }
 
+    return false;
+}
+
+static void GenerateIncAndLibs(const Target* target,
+                               const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                               string* inc_clause, string* lib_clause) {
+    set<string> inc_dedup;
+
+    for (auto inc : target->GetIncludeDirectories()) {
+        inc_dedup.insert(inc);
+    }
+
+    list<const DepTreeNode*> q;
+    vector<const DepTreeNode*> dep_list;
+
+    for (auto lib : target->GetLibraries()) {
+        auto ref = dep_tree.find(lib);
+
+        if (!lib.path.empty()) {
+            inc_dedup.insert(GetParentDir(lib.path));
+        }
+
+        for (auto inc : ref->second.inc_dirs) {
+            if (inc[0] != '/') {
+                inc_dedup.insert(RemoveDotAndDotDot(lib.path + "/" + inc));
+            }
+        }
+
+        if (!DepExists(dep_list, lib)) {
+            dep_list.push_back(&ref->second);
+            q.push_back(&ref->second);
+        }
+    }
+
+    while (!q.empty()) {
+        auto dep = q.front();
+        q.pop_front();
+
+        for (auto sub_dep : dep->dep_list) {
+            if (!sub_dep->info.path.empty()) {
+                inc_dedup.insert(GetParentDir(sub_dep->info.path));
+            }
+
+            for (auto inc : sub_dep->inc_dirs) {
+                if (inc[0] != '/') {
+                    inc_dedup.insert(RemoveDotAndDotDot(sub_dep->info.path + "/" + inc));
+                }
+            }
+
+            if (!DepExists(dep_list, sub_dep->info)) {
+                dep_list.push_back(sub_dep);
+                q.push_back(sub_dep);
+            }
+        }
+    }
+
+    // sort dep_list according to level desc
+    std::sort(dep_list.begin(), dep_list.end(),
+              [] (const DepTreeNode* a, const DepTreeNode* b) -> bool {
+                  if (a->info.path.empty()) {
+                      return false;
+                  }
+                  if (b->info.path.empty()) { // sys lib should be at the end of dep_list list
+                      return true;
+                  }
+
+                  return (a->level < b->level);
+              });
+
+    for (auto inc : inc_dedup) {
+        inc_clause->append(" -I" + inc);
+    }
+
+    for (auto dep : dep_list) {
+        const LibInfo& lib = dep->info;
+        if (lib.type == LIBRARY_TYPE_STATIC) {
+            lib_clause->append(" " + lib.path + "/lib" + lib.name + ".a");
+        } else {
+            if (!lib.path.empty()) {
+                lib_clause->append(" -L" + lib.path);
+            }
+            lib_clause->append(" -l" + lib.name);
+        }
+    }
+}
+
+static string GenerateDepBuildInfo(const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree) {
+    string content;
+    if (dep_tree.empty()) {
+        return content;
+    }
+
+    vector<const DepTreeNode*> dep_targets;
+    for (auto it = dep_tree.begin(); it != dep_tree.end(); ++it) {
+        if ((!it->second.label.empty()) && it->second.level == 0) {
+            dep_targets.push_back(&it->second);
+        }
+    }
+
+    if (!dep_targets.empty()) {
+        content += ".PHONY:";
+        for (auto dep : dep_targets) {
+            content += " " + dep->label;
+        }
+        content += "\n\n";
+    }
+
+    for (auto target : dep_targets) {
+        content += target->label + ":\n";
+
+        const string target_name =
+            (target->info.type == LIBRARY_TYPE_STATIC)
+            ? ("lib" + target->info.name + ".a")
+            : ("lib" + target->info.name + ".so");
+        content += "\t$(MAKE) debug=$(debug) " + target_name + " -C " + target->info.path + "\n\n";
+    }
+
+    return content;
+}
+
+bool Project::GenerateMakefile(const string& fname) {
     string content = "# This Makefile is generated by omake: https://github.com/ouonline/omake.git\n\n";
 
     bool has_c = false, has_cpp = false;
@@ -165,22 +352,12 @@ bool Project::GenerateMakefile(const string& fname) {
         "\n";
 
     // pre process for dependencies
-    vector<DepInfo> deplibs;
+    unordered_map<LibInfo, DepTreeNode, LibInfoHash> dep_tree;
     for (auto target : m_targets) {
-        GenerateDeplibLabel(target, &deplibs);
+        GenerateDepTree(target, &dep_tree);
     }
-    if (!deplibs.empty()) {
-        content += ".PHONY:";
-        for (auto it : deplibs) {
-            content += " " + it.label;
-        }
-        content += "\n\n";
 
-        for (auto it : deplibs) {
-            content += it.label + ":\n" +
-                "\t$(MAKE) debug=$(debug) " + it.name + " -C " + it.path + "\n\n";
-        }
-    }
+    content += GenerateDepBuildInfo(dep_tree);
 
     for (auto target : m_targets) {
         vector<pair<string, string>> target_cpp_obj_files;
@@ -200,9 +377,11 @@ bool Project::GenerateMakefile(const string& fname) {
         }
         content += "\n\n";
 
-        content += target->GetName() + "_INCLUDE :=" + target->GetIncludeClause() +
+        string inc_clause, lib_clause;
+        GenerateIncAndLibs(target, dep_tree, &inc_clause, &lib_clause);
+        content += target->GetName() + "_INCLUDE :=" + inc_clause +
             "\n\n" +
-            target->GetName() + "_LIBS :=" + target->GetLibClause() +
+            target->GetName() + "_LIBS :=" + lib_clause +
             "\n\n";
 
         for (auto obj : target_cpp_obj_files) {
@@ -214,29 +393,22 @@ bool Project::GenerateMakefile(const string& fname) {
             content += obj.first + ": " + obj.second + "\n" +
                 "\t$(CC) $(CFLAGS) $(" + target->GetName() + "_INCLUDE) -c $< -o $@\n\n";
         }
-    }
 
-    for (auto target : m_targets) {
-        target->ForeachGeneratedNameAndCommand([&target, &deplibs, &content] (const string& name, const string& cmd) {
+        target->ForeachGeneratedNameAndCommand([&target, &dep_tree, &content] (const string& name, const string& cmd) {
             content += name + ": $(" + target->GetName() + "_OBJS)";
 
-            if ((!target->GetStaticLibraries().empty()) || (!target->GetDynamicLibraries().empty())) {
-                content += " |";
-            }
-
-            for (auto lib : target->GetStaticLibraries()) {
-                const string& dep_name = "lib" + lib.name + ".a";
-                auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
-                if (dep_info) {
-                    content += " " + dep_info->label;
+            vector<string> dep_labels;
+            for (auto lib : target->GetLibraries()) {
+                auto ref = dep_tree.find(lib);
+                if (!ref->second.label.empty() && ref->second.level == 0) {
+                    dep_labels.push_back(ref->second.label);
                 }
             }
 
-            for (auto lib : target->GetDynamicLibraries()) {
-                const string& dep_name = "lib" + lib.name + ".so";
-                auto dep_info = FindDepInfo(deplibs, lib.path, dep_name);
-                if (dep_info) {
-                    content += " " + dep_info->label;
+            if (!dep_labels.empty()) {
+                content += " |";
+                for (auto label : dep_labels) {
+                    content += " " + label;
                 }
             }
 
