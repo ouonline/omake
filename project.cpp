@@ -116,11 +116,10 @@ static void GenerateDepTree(const Target* target,
         return node;
     };
 
-    target->ForeachDependency([&handle_lib] (const Dependency* dep) -> bool {
-        dep->ForeachLibrary([&handle_lib] (const LibInfo& lib) {
+    target->ForEachDependency([&handle_lib] (const Dependency* dep) {
+        dep->ForEachLibrary([&handle_lib] (const LibInfo& lib) {
             handle_lib(lib, 0);
         });
-        return true;
     });
 
     while (!q.empty()) {
@@ -139,8 +138,8 @@ static void GenerateDepTree(const Target* target,
                 return true;
             }
 
-            target->ForeachDependency([&parent, &handle_lib] (const Dependency* dep) -> bool {
-                dep->ForeachLibrary([&parent, &handle_lib] (const LibInfo& lib) {
+            target->ForEachDependency([&parent, &handle_lib] (const Dependency* dep) {
+                dep->ForEachLibrary([&parent, &handle_lib] (const LibInfo& lib) {
                     string new_path;
                     if ((!lib.path.empty()) && lib.path[0] != '/') {
                         new_path = RemoveDotAndDotDot(parent->lib.path + "/" + lib.path);
@@ -153,7 +152,7 @@ static void GenerateDepTree(const Target* target,
                     parent->deps.insert(node);
                 });
 
-                dep->ForeachIncDir([&parent] (const string& inc) {
+                dep->ForEachIncDir([&parent] (const string& inc) {
                     if (inc[0] == '/') {
                         parent->inc_dirs.insert(inc);
                     } else {
@@ -161,8 +160,6 @@ static void GenerateDepTree(const Target* target,
                             RemoveDotAndDotDot(parent->lib.path + "/" + inc));
                     }
                 });
-
-                return true;
             });
 
             return true;
@@ -199,8 +196,8 @@ static string GenerateTargetDepLibs(const Target* target,
     list<const DepTreeNode*> q;
     unordered_set<const DepTreeNode*> lib_dedup;
 
-    target->ForeachDependency([&dep_tree, &lib_dedup, &q] (const Dependency* dep) -> bool {
-        dep->ForeachLibrary([&dep_tree, &lib_dedup, &q] (const LibInfo& lib) {
+    target->ForEachDependency([&dep_tree, &lib_dedup, &q] (const Dependency* dep) {
+        dep->ForEachLibrary([&dep_tree, &lib_dedup, &q] (const LibInfo& lib) {
             auto ref = dep_tree.find(lib);
 
             if (IsSysLib(lib)) {
@@ -213,8 +210,6 @@ static string GenerateTargetDepLibs(const Target* target,
                 q.push_back(&ref->second);
             }
         });
-
-        return true;
     });
 
     while (!q.empty()) {
@@ -267,25 +262,23 @@ static string GenerateTargetDepLibs(const Target* target,
 static string GenerateObjects(const Target* target) {
     string content;
 
-    target->ForeachDependency([&content] (const Dependency* dep) -> bool {
+    target->ForEachDependency([&content] (const Dependency* dep) {
         const string& dep_name = dep->GetName();
 
-        dep->ForeachCSource([&content, &dep_name] (const string& src) {
+        dep->ForEachCSource([&content, &dep_name] (const string& src) {
             content += " " + src + "." + dep_name + ".o";
         });
 
-        dep->ForeachCppSource([&content, &dep_name] (const string& src) {
+        dep->ForEachCppSource([&content, &dep_name] (const string& src) {
             content += " " + src + "." + dep_name + ".o";
         });
-
-        return true;
     });
 
     return content;
 }
 
-static void GenerateDepLabel(const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
-                             unordered_map<const DepTreeNode*, string>* node2label) {
+static void GeneratePhonyLabel(const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                               unordered_map<const DepTreeNode*, string>* node2label) {
     const string label_prefix = "omake_phony_";
 
     for (auto it = dep_tree.begin(); it != dep_tree.end(); ++it) {
@@ -297,7 +290,7 @@ static void GenerateDepLabel(const unordered_map<LibInfo, DepTreeNode, LibInfoHa
     }
 }
 
-static string GenerateDepBuildInfo(const unordered_map<const DepTreeNode*, string>& node2label) {
+static string GeneratePhonyBuildInfo(const unordered_map<const DepTreeNode*, string>& node2label) {
     string content;
 
     if (!node2label.empty()) {
@@ -334,11 +327,11 @@ static string GenerateDepInc(const Dependency* dep,
     unordered_set<const DepTreeNode*> lib_dedup;
     unordered_set<string> inc_dedup;
 
-    dep->ForeachIncDir([&inc_dedup] (const string& inc) {
+    dep->ForEachIncDir([&inc_dedup] (const string& inc) {
         inc_dedup.insert(inc);
     });
 
-    dep->ForeachLibrary([&lib_dedup, &q, &dep_tree] (const LibInfo& lib) {
+    dep->ForEachLibrary([&lib_dedup, &q, &dep_tree] (const LibInfo& lib) {
         if (IsSysLib(lib)) {
             return;
         }
@@ -383,17 +376,17 @@ static string GenerateObjBuildInfo(const Target* target,
                                    unordered_set<string>* obj_dedup) {
     string content;
 
-    target->ForeachDependency([&dep_tree, &obj_dedup, &content] (const Dependency* dep) -> bool {
+    target->ForEachDependency([&dep_tree, &obj_dedup, &content] (const Dependency* dep) {
         const string& dep_name = dep->GetName();
         const string dep_inc_str = GenerateDepInc(dep, dep_tree);
 
         string flags;
-        dep->ForeachFlag([&flags] (const string& flag) {
+        dep->ForEachFlag([&flags] (const string& flag) {
             flags += " " + flag;
         });
 
         string local_content;
-        dep->ForeachCSource([&obj_dedup, &local_content, &dep_name, &flags, &dep_inc_str] (const string& src) {
+        dep->ForEachCSource([&obj_dedup, &local_content, &dep_name, &flags, &dep_inc_str] (const string& src) {
             const string obj = src + "." + dep_name + ".o";
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
@@ -406,7 +399,7 @@ static string GenerateObjBuildInfo(const Target* target,
             }
         });
 
-        dep->ForeachCppSource([&obj_dedup, &local_content, &dep_name, &flags, &dep_inc_str] (const string& src) {
+        dep->ForEachCppSource([&obj_dedup, &local_content, &dep_name, &flags, &dep_inc_str] (const string& src) {
             const string obj = src + "." + dep_name + ".o";
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
@@ -417,7 +410,6 @@ static string GenerateObjBuildInfo(const Target* target,
                 }
                 local_content += " -c $< -o $@\n\n";
             }
-
         });
 
         if (!local_content.empty()) {
@@ -426,8 +418,6 @@ static string GenerateObjBuildInfo(const Target* target,
             }
             content += local_content;
         }
-
-        return true;
     });
 
     return content;
@@ -436,19 +426,51 @@ static string GenerateObjBuildInfo(const Target* target,
 static string GenerateTargetDepLabels(const Target* target,
                                       const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
                                       const unordered_map<const DepTreeNode*, string>& node2label) {
-    string content;
+    unordered_set<string> label_dedup;
 
-    target->ForeachDependency([&dep_tree, &content, &node2label] (const Dependency* dep) -> bool {
-        dep->ForeachLibrary([&dep_tree, &content, &node2label] (const LibInfo& lib) {
+    target->ForEachDependency([&dep_tree, &label_dedup, &node2label] (const Dependency* dep) {
+        dep->ForEachLibrary([&dep_tree, &label_dedup, &node2label] (const LibInfo& lib) {
             auto dep_ref = dep_tree.find(lib);
             auto ref = node2label.find(&dep_ref->second);
             if (ref != node2label.end() && dep_ref->second.level == 1) {
-                content += " " + ref->second;
+                label_dedup.insert(ref->second);
             }
         });
-        return true;
     });
 
+    string content;
+    for (auto label : label_dedup) {
+        content += " " + label;
+    }
+    return content;
+}
+
+static string GetGeneratedName(const Target* target) {
+    const int type = target->GetType();
+    if (type == OMAKE_TYPE_BINARY) {
+        return target->GetName();
+    } else if (type == OMAKE_TYPE_STATIC) {
+        return "lib" + target->GetName() + ".a";
+    } else if (type == OMAKE_TYPE_SHARED) {
+        return "lib" + target->GetName() + ".so";
+    }
+
+    return string();
+}
+
+static string CollectFlagsForTarget(const Target* target) {
+    unordered_set<string> dedup;
+
+    target->ForEachDependency([&dedup] (const Dependency* dep) {
+        dep->ForEachFlag([&dedup] (const string& flag) {
+            dedup.insert(flag);
+        });
+    });
+
+    string content;
+    for (auto flag : dedup) {
+        content += " " + flag;
+    }
     return content;
 }
 
@@ -498,7 +520,7 @@ bool Project::GenerateMakefile(const string& fname) {
 
     content += "TARGET :=";
     for (auto iter : m_targets) {
-        content += " " + iter.second->GetGeneratedName();
+        content += " " + GetGeneratedName(iter.second);
     }
     content += "\n\n";
 
@@ -514,9 +536,9 @@ bool Project::GenerateMakefile(const string& fname) {
     }
 
     unordered_map<const DepTreeNode*, string> node2label;
-    GenerateDepLabel(dep_tree, &node2label);
+    GeneratePhonyLabel(dep_tree, &node2label);
 
-    content += GenerateDepBuildInfo(node2label);
+    content += GeneratePhonyBuildInfo(node2label);
 
     unordered_set<string> obj_dedup;
     for (auto iter : m_targets) {
@@ -536,7 +558,7 @@ bool Project::GenerateMakefile(const string& fname) {
             }
         }
 
-        content += target->GetGeneratedName() + ": $(" + target->GetName() + "_OBJS)";
+        content += GetGeneratedName(target) + ": $(" + target->GetName() + "_OBJS)";
 
         const string dep_label_str = GenerateTargetDepLabels(target, dep_tree, node2label);
         if (!dep_label_str.empty()) {
@@ -547,10 +569,7 @@ bool Project::GenerateMakefile(const string& fname) {
         if (target->GetType() == OMAKE_TYPE_STATIC) {
             cmd = "$(AR) rc $@ $^";
         } else {
-            string extra_flags;
-            target->GetDefaultDependency()->ForeachFlag([&extra_flags] (const string& flag) {
-                extra_flags += " " + flag;
-            });
+            const string extra_flags = CollectFlagsForTarget(target);
 
             if (target->GetType() == OMAKE_TYPE_BINARY) {
                 if (target->HasCppSource()) {

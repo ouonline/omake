@@ -113,31 +113,31 @@ void Dependency::AddIncludeDirectory(const char* name) {
     }
 }
 
-void Dependency::ForeachFlag(const function<void (const string&)>& f) const {
+void Dependency::ForEachFlag(const function<void (const string&)>& f) const {
     for (auto flag : m_flags) {
         f(flag);
     }
 }
 
-void Dependency::ForeachCSource(const function<void (const string&)>& f) const {
+void Dependency::ForEachCSource(const function<void (const string&)>& f) const {
     for (auto src : m_c_sources) {
         f(src);
     }
 }
 
-void Dependency::ForeachCppSource(const function<void (const string&)>& f) const {
+void Dependency::ForEachCppSource(const function<void (const string&)>& f) const {
     for (auto src : m_cpp_sources) {
         f(src);
     }
 }
 
-void Dependency::ForeachIncDir(const function<void (const string&)>& f) const {
+void Dependency::ForEachIncDir(const function<void (const string&)>& f) const {
     for (auto inc : m_inc_dirs) {
         f(inc);
     }
 }
 
-void Dependency::ForeachLibrary(const function<void (const LibInfo&)>& f) const {
+void Dependency::ForEachLibrary(const function<void (const LibInfo&)>& f) const {
     for (auto lib : m_libs) {
         f(lib);
     }

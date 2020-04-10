@@ -137,80 +137,6 @@ static int l_AddIncludeDirectories(lua_State* l) {
     return 0;
 }
 
-static int l_TargetAddFlags(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto target = *((Target**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        target->GetDefaultDependency()->AddFlag(lua_tostring(l, i));
-    }
-
-    return 0;
-}
-
-static int l_TargetAddSourceFiles(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto target = *((Target**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        target->GetDefaultDependency()->AddSourceFiles(
-            lua_tostring(l, i));
-    }
-
-    return 0;
-}
-
-static int l_TargetAddStaticLibrary(lua_State* l) {
-    int argc = lua_gettop(l);
-    if (argc != 3) {
-        cerr << "AddStaticLibrary() requires 2 arguments: `path` and `name`." << endl;
-        return 0;
-    }
-
-    auto target = *((Target**)lua_touserdata(l, 1));
-    target->GetDefaultDependency()->AddLibrary(lua_tostring(l, 2), // path
-                                               lua_tostring(l, 3), // name
-                                               OMAKE_TYPE_STATIC);
-
-    return 0;
-}
-
-static int l_TargetAddSharedLibrary(lua_State* l) {
-    int argc = lua_gettop(l);
-    if (argc != 3) {
-        cerr << "AddSharedLibrary() requires 2 arguments: `path` and `name`." << endl;
-        return 0;
-    }
-
-    auto target = *((Target**)lua_touserdata(l, 1));
-    target->GetDefaultDependency()->AddLibrary(lua_tostring(l, 2), // path
-                                               lua_tostring(l, 3), // name
-                                               OMAKE_TYPE_SHARED);
-
-    return 0;
-}
-
-static int l_TargetAddSysLibraries(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto target = *((Target**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        target->GetDefaultDependency()->AddLibrary(nullptr,
-                                                   lua_tostring(l, i),
-                                                   OMAKE_TYPE_SHARED);
-    }
-
-    return 0;
-}
-
-static int l_TargetAddIncludeDirectories(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto target = *((Target**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        target->GetDefaultDependency()->AddIncludeDirectory(
-            lua_tostring(l, i));
-    }
-
-    return 0;
-}
-
 static int l_TargetAddDependencies(lua_State* l) {
     int argc = lua_gettop(l);
     auto target = *((Target**)lua_touserdata(l, 1));
@@ -240,11 +166,5 @@ void InitLuaEnv(LuaState* l) {
         .set("AddIncludeDirectories", l_AddIncludeDirectories);
 
     l->newclass<Target>("Target")
-        .set("AddFlags", l_TargetAddFlags)
-        .set("AddSourceFiles", l_TargetAddSourceFiles)
-        .set("AddStaticLibrary", l_TargetAddStaticLibrary)
-        .set("AddSharedLibrary", l_TargetAddSharedLibrary)
-        .set("AddSysLibraries", l_TargetAddSysLibraries)
-        .set("AddIncludeDirectories", l_TargetAddIncludeDirectories)
         .set("AddDependencies", l_TargetAddDependencies);
 }

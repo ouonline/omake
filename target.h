@@ -5,26 +5,22 @@
 
 class Target final {
 public:
-    Target(const char* name, int type);
-
-    void AddDependency(Dependency*);
+    Target(const char* name, int type)
+        : m_type(type), m_name(name) {}
 
     int GetType() const { return m_type; }
-    const std::string& GetName() const;
-    std::string GetGeneratedName() const;
+    const std::string& GetName() const { return m_name; }
 
     bool HasCSource() const;
     bool HasCppSource() const;
 
-    Dependency* GetDefaultDependency() { return &m_default_dep; }
-    const Dependency* GetDefaultDependency() const { return &m_default_dep; }
-
-    void ForeachDependency(const std::function<bool (const Dependency*)>&) const;
+    void AddDependency(const Dependency*);
+    void ForEachDependency(const std::function<void (const Dependency*)>&) const;
 
 private:
     const int m_type;
-    Dependency m_default_dep;
-    std::unordered_set<Dependency*> m_deps;
+    const std::string m_name;
+    std::unordered_set<const Dependency*> m_deps;
 
 private:
     Target(const Target&);

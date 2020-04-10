@@ -39,11 +39,11 @@ public:
     bool HasCSource() const { return (!m_c_sources.empty()); }
     bool HasCppSource() const { return (!m_cpp_sources.empty()); }
 
-    void ForeachFlag(const std::function<void (const std::string&)>&) const;
-    void ForeachCSource(const std::function<void (const std::string&)>&) const;
-    void ForeachCppSource(const std::function<void (const std::string&)>&) const;
-    void ForeachIncDir(const std::function<void (const std::string&)>&) const;
-    void ForeachLibrary(const std::function<void (const LibInfo&)>&) const;
+    void ForEachFlag(const std::function<void (const std::string&)>&) const;
+    void ForEachCSource(const std::function<void (const std::string&)>&) const;
+    void ForEachCppSource(const std::function<void (const std::string&)>&) const;
+    void ForEachIncDir(const std::function<void (const std::string&)>&) const;
+    void ForEachLibrary(const std::function<void (const LibInfo&)>&) const;
 
 private:
     std::string m_name;
