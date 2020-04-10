@@ -90,8 +90,19 @@ struct DepTreeNode {
     int level;
     LibInfo lib;
     unordered_set<string> inc_dirs;
-    unordered_set<DepTreeNode*> deps;
+    vector<const DepTreeNode*> deps; // keep insertion order
 };
+
+static bool InsertDepNode(const DepTreeNode* dep, vector<const DepTreeNode*>* dep_list) {
+    for (auto ddd : *dep_list) {
+        if (ddd == dep) {
+            return false;
+        }
+    }
+
+    dep_list->push_back(dep);
+    return true;
+}
 
 static void GenerateDepTree(const Target* target,
                             unordered_map<LibInfo, DepTreeNode, LibInfoHash>* dep_tree) {
@@ -149,7 +160,7 @@ static void GenerateDepTree(const Target* target,
 
                     auto node = handle_lib(LibInfo(new_path, lib.name, lib.type),
                                            parent->level);
-                    parent->deps.insert(node);
+                    InsertDepNode(node, &parent->deps);
                 });
 
                 dep->ForEachIncDir([&parent] (const string& inc) {
@@ -192,21 +203,19 @@ static string GetParentDir(const string& path) {
 
 static string GenerateTargetDepLibs(const Target* target,
                                     const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree) {
-    string content;
     list<const DepTreeNode*> q;
-    unordered_set<const DepTreeNode*> lib_dedup;
+    vector<const DepTreeNode*> dep_list;
 
-    target->ForEachDependency([&dep_tree, &lib_dedup, &q] (const Dependency* dep) {
-        dep->ForEachLibrary([&dep_tree, &lib_dedup, &q] (const LibInfo& lib) {
+    target->ForEachDependency([&dep_tree, &dep_list, &q] (const Dependency* dep) {
+        dep->ForEachLibrary([&dep_tree, &dep_list, &q] (const LibInfo& lib) {
             auto ref = dep_tree.find(lib);
 
             if (IsSysLib(lib)) {
-                lib_dedup.insert(&ref->second);
+                InsertDepNode(&ref->second, &dep_list);
                 return;
             }
 
-            auto ret_pair = lib_dedup.insert(&ref->second);
-            if (ret_pair.second) {
+            if (InsertDepNode(&ref->second, &dep_list)) {
                 q.push_back(&ref->second);
             }
         });
@@ -218,32 +227,30 @@ static string GenerateTargetDepLibs(const Target* target,
 
         for (auto dep : parent->deps) {
             if (IsSysLib(dep->lib)) {
-                lib_dedup.insert(dep);
+                InsertDepNode(dep, &dep_list);
                 continue;
             }
 
-            auto ret_pair = lib_dedup.insert(dep);
-            if (ret_pair.second) {
+            if (InsertDepNode(dep, &dep_list)) {
                 q.push_back(dep);
             }
         }
     }
 
     // sort dep_list according to level asc
-    vector<const DepTreeNode*> dep_list;
-    dep_list.insert(dep_list.end(), lib_dedup.begin(), lib_dedup.end());
-    std::sort(dep_list.begin(), dep_list.end(),
-              [] (const DepTreeNode* a, const DepTreeNode* b) -> bool {
-                  if (a->lib.path.empty()) {
-                      return false;
-                  }
-                  if (b->lib.path.empty()) { // sys lib should be at the end of dep_list list
-                      return true;
-                  }
+    std::stable_sort(dep_list.begin(), dep_list.end(),
+                     [] (const DepTreeNode* a, const DepTreeNode* b) -> bool {
+                         if (a->lib.path.empty()) {
+                             return false;
+                         }
+                         if (b->lib.path.empty()) { // sys lib should be at the end of dep_list list
+                             return true;
+                         }
 
-                  return (a->level < b->level);
-              });
+                         return (a->level < b->level);
+                     });
 
+    string content;
     for (auto dep : dep_list) {
         const LibInfo& lib = dep->lib;
         if (lib.type == OMAKE_TYPE_STATIC) {
@@ -255,7 +262,6 @@ static string GenerateTargetDepLibs(const Target* target,
             content += " -l" + lib.name;
         }
     }
-
     return content;
 }
 

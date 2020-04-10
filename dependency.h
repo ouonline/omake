@@ -2,6 +2,7 @@
 #define __OMAKE_DEPENDENCY_H__
 
 #include <string>
+#include <vector>
 #include <functional>
 #include <unordered_set>
 
@@ -51,7 +52,7 @@ private:
     std::unordered_set<std::string> m_c_sources;
     std::unordered_set<std::string> m_cpp_sources;
     std::unordered_set<std::string> m_inc_dirs;
-    std::unordered_set<LibInfo, LibInfoHash> m_libs;
+    std::vector<LibInfo> m_libs; // keep insertion order
 };
 
 #endif

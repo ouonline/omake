@@ -91,6 +91,17 @@ void Dependency::AddSourceFiles(const char* fpath) {
     }
 }
 
+static bool EmplaceLibInfo(LibInfo&& lib, vector<LibInfo>* libs) {
+    for (auto iter = libs->begin(); iter != libs->end(); ++iter) {
+        if (*iter == lib) {
+            return false;
+        }
+    }
+
+    libs->push_back(lib);
+    return true;
+}
+
 void Dependency::AddLibrary(const char* path, const char* name, int type) {
     // path is null means `name` is sys lib
     string new_path;
@@ -99,8 +110,7 @@ void Dependency::AddLibrary(const char* path, const char* name, int type) {
     }
 
     LibInfo lib(new_path, name, type);
-    auto ret_pair = m_libs.insert(std::move(lib));
-    if (!ret_pair.second) {
+    if (!EmplaceLibInfo(std::move(lib), &m_libs)) {
         cerr << "AddLibrary(): duplicated lib [" << name << "]" << endl;
     }
 }
