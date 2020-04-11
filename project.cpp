@@ -243,7 +243,7 @@ static string GenerateTargetDepLibs(const Target* target,
                          if (a->lib.path.empty()) {
                              return false;
                          }
-                         if (b->lib.path.empty()) { // sys lib should be at the end of dep_list list
+                         if (b->lib.path.empty()) { // sys lib should be at the end of dep_list
                              return true;
                          }
 
@@ -289,9 +289,11 @@ static void GeneratePhonyLabel(const unordered_map<LibInfo, DepTreeNode, LibInfo
 
     for (auto it = dep_tree.begin(); it != dep_tree.end(); ++it) {
         if (!IsThirdPartyLib(it->first) && it->second.level == 1) {
-            node2label->insert(
-                make_pair(&it->second,
-                          label_prefix + std::to_string(node2label->size())));
+            if (it->first.path != ".") {
+                node2label->insert(
+                    make_pair(&it->second,
+                              label_prefix + std::to_string(node2label->size())));
+            }
         }
     }
 }
@@ -438,8 +440,17 @@ static string GenerateTargetDepLabels(const Target* target,
         dep->ForEachLibrary([&dep_tree, &label_dedup, &node2label] (const LibInfo& lib) {
             auto dep_ref = dep_tree.find(lib);
             auto ref = node2label.find(&dep_ref->second);
-            if (ref != node2label.end() && dep_ref->second.level == 1) {
+            if (ref != node2label.end()) {
                 label_dedup.insert(ref->second);
+            } else if (dep_ref->first.path == ".") { // local target
+                const int type = dep_ref->first.type;
+                string local_lib_name;
+                if (type == OMAKE_TYPE_STATIC) {
+                    local_lib_name = "lib" + dep_ref->first.name + ".a";
+                } else {
+                    local_lib_name = "lib" + dep_ref->first.name + ".so";
+                }
+                label_dedup.insert(std::move(local_lib_name));
             }
         });
     });
