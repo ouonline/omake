@@ -106,7 +106,9 @@ void Dependency::AddLibrary(const char* path, const char* name, int type) {
     // path is null means `name` is sys lib
     string new_path;
     if (path) {
-        new_path = RemoveDotAndDotDot(path);
+        const unsigned int plen = strlen(path);
+        unsigned int chars_removed = TextTrim(path, plen, '/');
+        new_path = RemoveDotAndDotDot(string(path, plen - chars_removed));
     }
 
     LibInfo lib(new_path, name, type);
@@ -116,7 +118,10 @@ void Dependency::AddLibrary(const char* path, const char* name, int type) {
 }
 
 void Dependency::AddIncludeDirectory(const char* name) {
-    auto ret_pair = m_inc_dirs.insert(std::move(RemoveDotAndDotDot(name)));
+    const unsigned int namelen = strlen(name);
+    unsigned int chars_removed = TextTrim(name, namelen, '/');
+    auto ret_pair = m_inc_dirs.insert(
+        std::move(RemoveDotAndDotDot(string(name, namelen - chars_removed))));
     if (!ret_pair.second) {
         cerr << "AddIncludeDirectory(): duplicated include directory ["
              << name << "]" << endl;

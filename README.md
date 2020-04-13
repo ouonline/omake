@@ -1,1 +1,1 @@
-A tool used to generate `Makefile` for C/C++ projects. see `utils.cpp` for available commands and `omake.lua` for example.
+`omake` is a tool used to generate `Makefile` for C/C++ projects. See `InitLuaEnv()` in `utils.cpp` for available commands and `omake.lua` for how to build a binary. Refer to `omake.lua` of [lua-cpp](https://github.com/ouonline/lua-cpp) to see how to build `.a` and `.so`.

@@ -10,16 +10,16 @@ endif
 
 TARGET := omake
 
-.PHONY: all clean
+.PHONY: all clean distclean
 
 all: $(TARGET)
 
-.PHONY: omake_phony_1 omake_phony_0
-
-omake_phony_1:
+.PHONY: omake_phony_0
+omake_phony_0:
 	$(MAKE) debug=$(debug) libluacpp_static.a -C ../lua-cpp
 
-omake_phony_0:
+.PHONY: omake_phony_1
+omake_phony_1:
 	$(MAKE) debug=$(debug) libtext_utils_static.a -C ../text-utils
 
 omake_dep_0_INCLUDE := -I../../../lua -I..
@@ -48,3 +48,8 @@ omake: $(omake_OBJS) | omake_phony_0 omake_phony_1
 
 clean:
 	rm -f $(TARGET) $(omake_OBJS)
+
+distclean:
+	$(MAKE) clean
+	$(MAKE) distclean -C ../text-utils
+	$(MAKE) distclean -C ../lua-cpp

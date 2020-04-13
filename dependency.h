@@ -52,7 +52,7 @@ private:
     std::unordered_set<std::string> m_c_sources;
     std::unordered_set<std::string> m_cpp_sources;
     std::unordered_set<std::string> m_inc_dirs;
-    std::vector<LibInfo> m_libs; // keep insertion order
+    std::vector<LibInfo> m_libs; // keep order of insertion
 };
 
 #endif

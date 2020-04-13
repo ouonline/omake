@@ -5,7 +5,6 @@
 #include <fstream>
 #include <unordered_map>
 #include <list>
-#include <algorithm> // std::sort
 #include <unistd.h> // access()
 using namespace std;
 
@@ -13,7 +12,7 @@ using namespace std;
 using namespace luacpp;
 
 Target* Project::CreateBinary(const char* name) {
-    auto ret_pair = m_targets.insert(make_pair(name, nullptr));
+    auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
     if (!ret_pair.second) {
         cerr << "duplcated target name[" << name << "]" << endl;
         return nullptr;
@@ -24,7 +23,7 @@ Target* Project::CreateBinary(const char* name) {
 }
 
 Target* Project::CreateStaticLibrary(const char* name) {
-    auto ret_pair = m_targets.insert(make_pair(name, nullptr));
+    auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
     if (!ret_pair.second) {
         cerr << "duplcated target name[" << name << "]" << endl;
         return nullptr;
@@ -35,7 +34,7 @@ Target* Project::CreateStaticLibrary(const char* name) {
 }
 
 Target* Project::CreateSharedLibrary(const char* name) {
-    auto ret_pair = m_targets.insert(make_pair(name, nullptr));
+    auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
     if (!ret_pair.second) {
         cerr << "duplcated target name[" << name << "]" << endl;
         return nullptr;
@@ -82,15 +81,18 @@ static inline bool IsThirdPartyLib(const LibInfo& lib) {
     return (access((lib.path + "/omake.lua").c_str(), F_OK) != 0);
 }
 
+static inline bool IsLocalLib(const LibInfo& lib) {
+    return (lib.path == ".");
+}
+
 struct DepTreeNode {
     DepTreeNode(const string& _path, const string& _name, int _lib_type)
-        : level(0), lib(_path, _name, _lib_type) {}
-    DepTreeNode(const LibInfo& _lib) : level(0), lib(_lib) {}
+        : lib(_path, _name, _lib_type) {}
+    DepTreeNode(const LibInfo& _lib) : lib(_lib) {}
 
-    int level;
     LibInfo lib;
     unordered_set<string> inc_dirs;
-    vector<const DepTreeNode*> deps; // keep insertion order
+    vector<const DepTreeNode*> deps; // keep order of insertion
 };
 
 static bool InsertDepNode(const DepTreeNode* dep, vector<const DepTreeNode*>* dep_list) {
@@ -108,7 +110,7 @@ static void GenerateDepTree(const Target* target,
                             unordered_map<LibInfo, DepTreeNode, LibInfoHash>* dep_tree) {
     list<DepTreeNode*> q;
 
-    auto handle_lib = [&q, &dep_tree] (const LibInfo& lib, int parent_level) -> DepTreeNode* {
+    auto handle_lib = [&q, &dep_tree] (const LibInfo& lib) -> DepTreeNode* {
         auto ret_pair = dep_tree->insert(
             std::move(make_pair(lib, DepTreeNode(lib))));
         auto node = &ret_pair.first->second;
@@ -119,17 +121,12 @@ static void GenerateDepTree(const Target* target,
             }
         }
 
-        int level = parent_level + 1;
-        if (level > node->level) {
-            node->level = level;
-        }
-
         return node;
     };
 
     target->ForEachDependency([&handle_lib] (const Dependency* dep) {
         dep->ForEachLibrary([&handle_lib] (const LibInfo& lib) {
-            handle_lib(lib, 0);
+            handle_lib(lib);
         });
     });
 
@@ -158,8 +155,7 @@ static void GenerateDepTree(const Target* target,
                         new_path = lib.path;
                     }
 
-                    auto node = handle_lib(LibInfo(new_path, lib.name, lib.type),
-                                           parent->level);
+                    auto node = handle_lib(LibInfo(new_path, lib.name, lib.type));
                     InsertDepNode(node, &parent->deps);
                 });
 
@@ -183,10 +179,10 @@ static void GenerateDepTree(const Target* target,
 }
 
 static string GetParentDir(const string& path) {
-    if (path == ".." || path == "../") {
+    if (path == "..") {
         return "../..";
     }
-    if (path == "." || path == "./") {
+    if (path == ".") {
         return "..";
     }
 
@@ -201,21 +197,17 @@ static string GetParentDir(const string& path) {
     return path;
 }
 
-static string GenerateTargetDepLibs(const Target* target,
-                                    const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree) {
+static void CalcInDegree(const Target* target,
+                         const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                         unordered_map<const DepTreeNode*, int>* node2in) {
     list<const DepTreeNode*> q;
-    vector<const DepTreeNode*> dep_list;
 
-    target->ForEachDependency([&dep_tree, &dep_list, &q] (const Dependency* dep) {
-        dep->ForEachLibrary([&dep_tree, &dep_list, &q] (const LibInfo& lib) {
+    target->ForEachDependency([&dep_tree, &q, &node2in] (const Dependency* dep) {
+        dep->ForEachLibrary([&dep_tree, &q, &node2in] (const LibInfo& lib) {
             auto ref = dep_tree.find(lib);
-
-            if (IsSysLib(lib)) {
-                InsertDepNode(&ref->second, &dep_list);
-                return;
-            }
-
-            if (InsertDepNode(&ref->second, &dep_list)) {
+            auto ret_pair = node2in->insert(std::move(make_pair(&ref->second, 0)));
+            ++ret_pair.first->second;
+            if (ret_pair.second) {
                 q.push_back(&ref->second);
             }
         });
@@ -226,29 +218,52 @@ static string GenerateTargetDepLibs(const Target* target,
         q.pop_front();
 
         for (auto dep : parent->deps) {
-            if (IsSysLib(dep->lib)) {
-                InsertDepNode(dep, &dep_list);
-                continue;
-            }
-
-            if (InsertDepNode(dep, &dep_list)) {
+            auto ret_pair = node2in->insert(std::move(make_pair(dep, 0)));
+            ++ret_pair.first->second;
+            if (ret_pair.second) {
                 q.push_back(dep);
             }
         }
     }
+}
 
-    // sort dep_list according to level asc
-    std::stable_sort(dep_list.begin(), dep_list.end(),
-                     [] (const DepTreeNode* a, const DepTreeNode* b) -> bool {
-                         if (a->lib.path.empty()) {
-                             return false;
-                         }
-                         if (b->lib.path.empty()) { // sys lib should be at the end of dep_list
-                             return true;
-                         }
+static void TopologicalSort(const Target* target,
+                            const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                            unordered_map<const DepTreeNode*, int>* node2in,
+                            vector<const DepTreeNode*>* res) {
+    list<const DepTreeNode*> q;
 
-                         return (a->level < b->level);
-                     });
+    target->ForEachDependency([&dep_tree, &q, &node2in] (const Dependency* dep) {
+        dep->ForEachLibrary([&dep_tree, &q, &node2in] (const LibInfo& lib) {
+            auto dep_ref = dep_tree.find(lib);
+            auto ref = node2in->find(&dep_ref->second);
+            --ref->second;
+            if (ref->second == 0) {
+                q.push_back(ref->first);
+            }
+        });
+    });
+
+    while (!q.empty()) {
+        auto parent = q.front();
+        q.pop_front();
+        res->push_back(parent);
+
+        for (auto dep : parent->deps) {
+            auto ref = node2in->find(dep);
+            --ref->second;
+            if (ref->second == 0) {
+                q.push_back(dep);
+            }
+        }
+    }
+}
+
+static string GenerateTargetDepLibs(const Target* target,
+                                    const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                                    unordered_map<const DepTreeNode*, int>* node2in) {
+    vector<const DepTreeNode*> dep_list;
+    TopologicalSort(target, dep_tree, node2in, &dep_list);
 
     string content;
     for (auto dep : dep_list) {
@@ -283,47 +298,40 @@ static string GenerateObjects(const Target* target) {
     return content;
 }
 
-static void GeneratePhonyLabel(const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
-                               unordered_map<const DepTreeNode*, string>* node2label) {
+static string GeneratePhonyBuildInfo(const Target* target,
+                                     const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                                     const unordered_map<const DepTreeNode*, int>& node2in,
+                                     unordered_map<LibInfo, string, LibInfoHash>* node2label) {
     const string label_prefix = "omake_phony_";
 
-    for (auto it = dep_tree.begin(); it != dep_tree.end(); ++it) {
-        if (!IsThirdPartyLib(it->first) && it->second.level == 1) {
-            if (it->first.path != ".") {
-                node2label->insert(
-                    make_pair(&it->second,
-                              label_prefix + std::to_string(node2label->size())));
-            }
-        }
-    }
-}
-
-static string GeneratePhonyBuildInfo(const unordered_map<const DepTreeNode*, string>& node2label) {
     string content;
+    vector<const DepTreeNode*> node_list;
 
-    if (!node2label.empty()) {
-        content += ".PHONY:";
-        for (auto iter : node2label) {
-            if (iter.first->level == 1) {
-                content += " " + iter.second;
+    target->ForEachDependency([&dep_tree, &node2in, &node_list] (const Dependency* dep) {
+        dep->ForEachLibrary([&dep_tree, &node2in, &node_list] (const LibInfo& lib) {
+            auto dep_ref = dep_tree.find(lib);
+            auto ref = node2in.find(&dep_ref->second);
+            if (ref != node2in.end() && ref->second == 1) {
+                node_list.push_back(ref->first);
+            }
+        });
+    });
+
+    for (auto iter : node_list) {
+        const LibInfo& lib = iter->lib;
+        if ((!IsLocalLib(lib)) && (!IsSysLib(lib)) && (!IsThirdPartyLib(lib))) {
+            auto ret_pair = node2label->insert(
+                std::move(make_pair(lib, label_prefix + std::to_string(node2label->size()))));
+            if (ret_pair.second) {
+                const string target_name = (lib.type == OMAKE_TYPE_STATIC)
+                    ? ("lib" + lib.name + ".a")
+                    : ("lib" + lib.name + ".so");
+                content += ".PHONY: " + ret_pair.first->second + "\n" +
+                    ret_pair.first->second + ":\n" +
+                    "\t$(MAKE) debug=$(debug) " + target_name +
+                    " -C " + lib.path + "\n\n";
             }
         }
-        content += "\n\n";
-    }
-
-    for (auto iter : node2label) {
-        if (iter.first->level != 1) {
-            continue;
-        }
-
-        content += iter.second + ":\n";
-
-        const string target_name =
-            (iter.first->lib.type == OMAKE_TYPE_STATIC)
-            ? ("lib" + iter.first->lib.name + ".a")
-            : ("lib" + iter.first->lib.name + ".so");
-        content += "\t$(MAKE) debug=$(debug) " + target_name +
-            " -C " + iter.first->lib.path + "\n\n";
     }
 
     return content;
@@ -355,7 +363,7 @@ static string GenerateDepInc(const Dependency* dep,
         auto parent = q.front();
         q.pop_front();
 
-        inc_dedup.insert(GetParentDir(parent->lib.path));
+        inc_dedup.insert(std::move(GetParentDir(parent->lib.path)));
         for (auto inc : parent->inc_dirs) {
             inc_dedup.insert(inc);
         }
@@ -432,23 +440,21 @@ static string GenerateObjBuildInfo(const Target* target,
 }
 
 static string GenerateTargetDepLabels(const Target* target,
-                                      const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
-                                      const unordered_map<const DepTreeNode*, string>& node2label) {
+                                      const unordered_map<LibInfo, string, LibInfoHash>& node2label) {
     unordered_set<string> label_dedup;
 
-    target->ForEachDependency([&dep_tree, &label_dedup, &node2label] (const Dependency* dep) {
-        dep->ForEachLibrary([&dep_tree, &label_dedup, &node2label] (const LibInfo& lib) {
-            auto dep_ref = dep_tree.find(lib);
-            auto ref = node2label.find(&dep_ref->second);
+    target->ForEachDependency([&label_dedup, &node2label] (const Dependency* dep) {
+        dep->ForEachLibrary([&label_dedup, &node2label] (const LibInfo& lib) {
+            auto ref = node2label.find(lib);
             if (ref != node2label.end()) {
                 label_dedup.insert(ref->second);
-            } else if (dep_ref->first.path == ".") { // local target
-                const int type = dep_ref->first.type;
+            } else if (IsLocalLib(lib)) {
+                const int type = lib.type;
                 string local_lib_name;
                 if (type == OMAKE_TYPE_STATIC) {
-                    local_lib_name = "lib" + dep_ref->first.name + ".a";
+                    local_lib_name = "lib" + lib.name + ".a";
                 } else {
-                    local_lib_name = "lib" + dep_ref->first.name + ".so";
+                    local_lib_name = "lib" + lib.name + ".so";
                 }
                 label_dedup.insert(std::move(local_lib_name));
             }
@@ -541,7 +547,7 @@ bool Project::GenerateMakefile(const string& fname) {
     }
     content += "\n\n";
 
-    content += ".PHONY: all clean\n"
+    content += ".PHONY: all clean distclean\n"
         "\n"
         "all: $(TARGET)\n"
         "\n";
@@ -552,24 +558,24 @@ bool Project::GenerateMakefile(const string& fname) {
         GenerateDepTree(iter.second, &dep_tree);
     }
 
-    unordered_map<const DepTreeNode*, string> node2label;
-    GeneratePhonyLabel(dep_tree, &node2label);
-
-    content += GeneratePhonyBuildInfo(node2label);
-
     unordered_set<string> obj_dedup;
+    unordered_map<LibInfo, string, LibInfoHash> node2label;
+
     for (auto iter : m_targets) {
         auto target = iter.second;
 
+        unordered_map<const DepTreeNode*, int> node2in;
+        CalcInDegree(target, dep_tree, &node2in);
+
+        content += GeneratePhonyBuildInfo(target, dep_tree, node2in, &node2label);
         content += GenerateObjBuildInfo(target, dep_tree, &obj_dedup);
 
         content += target->GetName() + "_OBJS :=" + GenerateObjects(target) + "\n\n";
 
-
         string target_dep_libs;
         if (target->GetType() == OMAKE_TYPE_BINARY ||
             target->GetType() == OMAKE_TYPE_SHARED) {
-            target_dep_libs = GenerateTargetDepLibs(target, dep_tree);
+            target_dep_libs = GenerateTargetDepLibs(target, dep_tree, &node2in);
             if (!target_dep_libs.empty()) {
                 content += target->GetName() + "_LIBS :=" + target_dep_libs + "\n\n";
             }
@@ -577,7 +583,7 @@ bool Project::GenerateMakefile(const string& fname) {
 
         content += GetGeneratedName(target) + ": $(" + target->GetName() + "_OBJS)";
 
-        const string dep_label_str = GenerateTargetDepLabels(target, dep_tree, node2label);
+        const string dep_label_str = GenerateTargetDepLabels(target, node2label);
         if (!dep_label_str.empty()) {
             content += " |" + dep_label_str;
         }
@@ -627,7 +633,13 @@ bool Project::GenerateMakefile(const string& fname) {
     for (auto iter : m_targets) {
         content += " $(" + iter.second->GetName() + "_OBJS)";
     }
-    content += "\n";
+    content += "\n\n";
+
+    content += "distclean:\n"
+        "\t$(MAKE) clean\n";
+    for (auto dep : node2label) {
+        content += "\t$(MAKE) distclean -C " + dep.first.path + "\n";
+    }
 
     return WriteFile(fname, content);
 }
