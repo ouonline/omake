@@ -11,10 +11,18 @@ int main(void) {
     InitLuaEnv(&l);
 
     string errmsg;
-    bool ok = l.dofile("omake.lua", &errmsg, 1, [] (int, const LuaObject& obj) -> bool {
-        auto project = obj.touserdata().object<Project>();
-        return project->GenerateMakefile("Makefile");
-    });
+    bool ok = l.dofile("omake.lua", &errmsg,
+                       [] (int nresults) -> bool {
+                           if (nresults != 1) {
+                               cerr << "result num != 1" << endl;
+                               return false;
+                           }
+                           return true;
+                       },
+                       [] (int, const LuaObject& obj) -> bool {
+                           auto project = obj.touserdata().object<Project>();
+                           return project->GenerateMakefile("Makefile");
+                       });
     if (!ok) {
         cerr << "dofile error: " << errmsg << endl;
     }

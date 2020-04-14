@@ -14,7 +14,7 @@ using namespace luacpp;
 Target* Project::CreateBinary(const char* name) {
     auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
     if (!ret_pair.second) {
-        cerr << "duplcated target name[" << name << "]" << endl;
+        cerr << "duplcated binary name[" << name << "]" << endl;
         return nullptr;
     }
 
@@ -25,7 +25,7 @@ Target* Project::CreateBinary(const char* name) {
 Target* Project::CreateStaticLibrary(const char* name) {
     auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
     if (!ret_pair.second) {
-        cerr << "duplcated target name[" << name << "]" << endl;
+        cerr << "duplcated static library name[" << name << "]" << endl;
         return nullptr;
     }
 
@@ -36,7 +36,7 @@ Target* Project::CreateStaticLibrary(const char* name) {
 Target* Project::CreateSharedLibrary(const char* name) {
     auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
     if (!ret_pair.second) {
-        cerr << "duplcated target name[" << name << "]" << endl;
+        cerr << "duplcated shared library name[" << name << "]" << endl;
         return nullptr;
     }
 
@@ -134,12 +134,17 @@ static void GenerateDepTree(const Target* target,
         auto parent = q.front();
         q.pop_front();
 
-        LuaState l;
-        InitLuaEnv(&l);
-
-        string errmsg;
         const string omake_file = parent->lib.path + "/omake.lua";
-        bool ok = l.dofile(omake_file.c_str(), &errmsg, 1, [&handle_lib, &parent] (int, const LuaObject& obj) -> bool {
+
+        auto before_proc = [&omake_file] (int nresults) -> bool {
+            if (nresults != 1) {
+                cerr << "omake [" << omake_file << "] result num != 1" << endl;
+                return false;
+            }
+            return true;
+        };
+
+        auto proc = [&parent, &handle_lib] (int, const LuaObject& obj) -> bool {
             auto project = obj.touserdata().object<Project>();
             auto target = project->FindTarget(parent->lib.name);
             if (!target) {
@@ -170,7 +175,13 @@ static void GenerateDepTree(const Target* target,
             });
 
             return true;
-        });
+        };
+
+        LuaState l;
+        InitLuaEnv(&l);
+
+        string errmsg;
+        bool ok = l.dofile(omake_file.c_str(), &errmsg, before_proc, proc);
         if (!ok) {
             cerr << "Preprocessing dependency [" << omake_file << "] failed: "
                  << errmsg << endl;
