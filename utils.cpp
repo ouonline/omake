@@ -61,6 +61,22 @@ string RemoveDotAndDotDot(const string& path) {
     return new_path;
 }
 
+string GetBaseName(const string& path) {
+    const char* begin = path.data();
+    const char* end = path.data() + path.size();
+    const char* cursor = end - 1;
+
+    for (cursor = end - 1; cursor >= begin; --cursor) {
+        if (*cursor == '/') {
+            return string(cursor + 1, end - cursor - 1);
+        }
+    }
+
+    return path;
+}
+
+/* -------------------------------------------------------------------------- */
+
 static Project* CreateProject() {
     return new Project();
 }

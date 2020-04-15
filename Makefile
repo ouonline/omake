@@ -24,26 +24,26 @@ omake_phony_1:
 
 omake_dep_0_INCLUDE := -I../../../lua -I..
 
-utils.cpp.omake_dep_0.o: utils.cpp
+omake_dep_0.utils.cpp.o: utils.cpp
 	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
 
-main.cpp.omake_dep_0.o: main.cpp
+omake_dep_0.main.cpp.o: main.cpp
 	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
 
-dependency.cpp.omake_dep_0.o: dependency.cpp
+omake_dep_0.dependency.cpp.o: dependency.cpp
 	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
 
-target.cpp.omake_dep_0.o: target.cpp
+omake_dep_0.target.cpp.o: target.cpp
 	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
 
-project.cpp.omake_dep_0.o: project.cpp
+omake_dep_0.project.cpp.o: project.cpp
 	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
 
-omake_OBJS := utils.cpp.omake_dep_0.o main.cpp.omake_dep_0.o dependency.cpp.omake_dep_0.o target.cpp.omake_dep_0.o project.cpp.omake_dep_0.o
+omake_OBJS := omake_dep_0.project.cpp.o omake_dep_0.target.cpp.o omake_dep_0.dependency.cpp.o omake_dep_0.main.cpp.o omake_dep_0.utils.cpp.o
 
-omake_LIBS := ../lua-cpp/libluacpp_static.a ../text-utils/libtext_utils_static.a ../../../lua/src/liblua.a -lm -ldl
+omake_LIBS := ../lua-cpp/libluacpp_static.a ../text-utils/libtext_utils_static.a ../../../lua/src/liblua.a
 
-omake: $(omake_OBJS) | omake_phony_0 omake_phony_1
+omake: $(omake_OBJS) | omake_phony_1 omake_phony_0
 	$(CXX) $(CXXFLAGS) -Wextra -Werror -Wall -o $@ $^ $(omake_LIBS)
 
 clean:

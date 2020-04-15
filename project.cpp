@@ -45,7 +45,7 @@ Target* Project::CreateSharedLibrary(const char* name) {
 }
 
 Dependency* Project::CreateDependency() {
-    static const string dep_prefix = "omake_dep_";
+    const string dep_prefix = "omake_dep_";
 
     auto d = new Dependency(dep_prefix + std::to_string(m_dep_counter));
     ++m_dep_counter;
@@ -291,21 +291,11 @@ static string GenerateTargetDepLibs(const Target* target,
     return content;
 }
 
-static string GenerateObjects(const Target* target) {
+static string GenerateObjects(const unordered_set<string>& obj_of_target) {
     string content;
-
-    target->ForEachDependency([&content] (const Dependency* dep) {
-        const string& dep_name = dep->GetName();
-
-        dep->ForEachCSource([&content, &dep_name] (const string& src) {
-            content += " " + src + "." + dep_name + ".o";
-        });
-
-        dep->ForEachCppSource([&content, &dep_name] (const string& src) {
-            content += " " + src + "." + dep_name + ".o";
-        });
-    });
-
+    for (auto obj : obj_of_target) {
+        content += " " + obj;
+    }
     return content;
 }
 
@@ -398,12 +388,24 @@ static string GenerateDepInc(const Dependency* dep,
     return content;
 }
 
+static string GenerateObjectName(const string& src, const string& dep_name,
+                                 size_t seq) {
+    auto base_name = GetBaseName(src);
+    if (base_name.size() != src.size()) {
+        return "omake_obj_" + std::to_string(seq) + "." +
+            dep_name + "." + base_name + ".o";
+    }
+
+    return dep_name + "." + base_name + ".o";
+}
+
 static string GenerateObjBuildInfo(const Target* target,
                                    const unordered_map<LibInfo, DepTreeNode, LibInfoHash>& dep_tree,
+                                   unordered_set<string>* obj_of_target,
                                    unordered_set<string>* obj_dedup) {
     string content;
 
-    target->ForEachDependency([&dep_tree, &obj_dedup, &content] (const Dependency* dep) {
+    target->ForEachDependency([&] (const Dependency* dep) {
         const string& dep_name = dep->GetName();
         const string dep_inc_str = GenerateDepInc(dep, dep_tree);
 
@@ -413,8 +415,9 @@ static string GenerateObjBuildInfo(const Target* target,
         });
 
         string local_content;
-        dep->ForEachCSource([&obj_dedup, &local_content, &dep_name, &flags, &dep_inc_str] (const string& src) {
-            const string obj = src + "." + dep_name + ".o";
+        dep->ForEachCSource([&] (const string& src) {
+            const string obj = GenerateObjectName(src, dep_name, obj_dedup->size());
+            obj_of_target->insert(obj);
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
                 local_content += obj + ": " + src + "\n" +
@@ -426,8 +429,9 @@ static string GenerateObjBuildInfo(const Target* target,
             }
         });
 
-        dep->ForEachCppSource([&obj_dedup, &local_content, &dep_name, &flags, &dep_inc_str] (const string& src) {
-            const string obj = src + "." + dep_name + ".o";
+        dep->ForEachCppSource([&] (const string& src) {
+            const string obj = GenerateObjectName(src, dep_name, obj_dedup->size());
+            obj_of_target->insert(obj);
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
                 local_content += obj + ": " + src + "\n" +
@@ -579,9 +583,11 @@ bool Project::GenerateMakefile(const string& fname) {
         CalcInDegree(target, dep_tree, &node2in);
 
         content += GeneratePhonyBuildInfo(target, dep_tree, node2in, &node2label);
-        content += GenerateObjBuildInfo(target, dep_tree, &obj_dedup);
 
-        content += target->GetName() + "_OBJS :=" + GenerateObjects(target) + "\n\n";
+        unordered_set<string> obj_of_target;
+        content += GenerateObjBuildInfo(target, dep_tree, &obj_of_target, &obj_dedup);
+
+        content += target->GetName() + "_OBJS :=" + GenerateObjects(obj_of_target) + "\n\n";
 
         string target_dep_libs;
         if (target->GetType() == OMAKE_TYPE_BINARY ||

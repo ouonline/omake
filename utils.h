@@ -6,5 +6,6 @@
 
 void InitLuaEnv(luacpp::LuaState* l);
 std::string RemoveDotAndDotDot(const std::string& path);
+std::string GetBaseName(const std::string& path);
 
 #endif
