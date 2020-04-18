@@ -17,7 +17,7 @@ void Target::ForEachDependency(const function<void (const Dependency*)>& f) cons
     }
 }
 
-bool Target::HasCSource() const  {
+bool Target::HasCSource() const {
     for (auto dep : m_deps) {
         if (dep->HasCSource()) {
             return true;
@@ -27,7 +27,7 @@ bool Target::HasCSource() const  {
     return false;
 }
 
-bool Target::HasCppSource() const  {
+bool Target::HasCppSource() const {
     for (auto dep : m_deps) {
         if (dep->HasCppSource()) {
             return true;

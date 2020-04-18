@@ -391,9 +391,8 @@ static string GenerateDepInc(const Dependency* dep,
 static string GenerateObjectName(const string& src, const string& dep_name,
                                  size_t seq) {
     auto base_name = GetBaseName(src);
-    if (base_name.size() != src.size()) {
-        return "omake_obj_" + std::to_string(seq) + "." +
-            dep_name + "." + base_name + ".o";
+    if (base_name.size() != src.size()) { // srcs not in current dir
+        return dep_name + "." + std::to_string(seq) + "." + base_name + ".o";
     }
 
     return dep_name + "." + base_name + ".o";
@@ -416,7 +415,7 @@ static string GenerateObjBuildInfo(const Target* target,
 
         string local_content;
         dep->ForEachCSource([&] (const string& src) {
-            const string obj = GenerateObjectName(src, dep_name, obj_dedup->size());
+            const string obj = GenerateObjectName(src, dep_name, obj_of_target->size());
             obj_of_target->insert(obj);
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
@@ -430,7 +429,7 @@ static string GenerateObjBuildInfo(const Target* target,
         });
 
         dep->ForEachCppSource([&] (const string& src) {
-            const string obj = GenerateObjectName(src, dep_name, obj_dedup->size());
+            const string obj = GenerateObjectName(src, dep_name, obj_of_target->size());
             obj_of_target->insert(obj);
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {

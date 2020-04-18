@@ -4,7 +4,7 @@
 #include "common.h"
 #include <iostream>
 using namespace std;
-using namespace utils;
+using namespace outils;
 
 #include "utils.h"
 using namespace luacpp;

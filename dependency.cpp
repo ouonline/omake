@@ -7,7 +7,7 @@
 using namespace std;
 
 #include "text-utils/text_utils.h"
-using namespace utils;
+using namespace outils;
 
 static void AddFileEndsWith(const string& dirname, const char* suffix,
                             std::unordered_set<string>* file_set) {
