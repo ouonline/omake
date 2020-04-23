@@ -21,13 +21,13 @@ string RemoveDotAndDotDot(const string& path) {
         }
 
         if (path_stack.empty()) {
-            path_stack.push_back(std::move(string(s, l)));
+            path_stack.push_back(string(s, l));
         } else {
             if (l == 1 && s[0] == '.') {
                 return true;
             } else if (l == 2 && s[0] == '.' && s[1] == '.') {
                 if (path_stack.back() == "..") {
-                    path_stack.push_back(std::move(string(s, l)));
+                    path_stack.push_back(string(s, l));
                 } else if (path_stack.back() == ".") {
                     path_stack.back() = string(s, l);
                 } else if (path_stack.size() == 1 && path_stack[0] == "/") {
@@ -38,9 +38,9 @@ string RemoveDotAndDotDot(const string& path) {
                 return true;
             } else {
                 if (path_stack.back() == ".") {
-                    path_stack.back() = std::move(string(s, l));
+                    path_stack.back() = string(s, l);
                 } else {
-                    path_stack.push_back(std::move(string(s, l)));
+                    path_stack.push_back(string(s, l));
                 }
             }
         }

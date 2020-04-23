@@ -23,8 +23,7 @@ static void AddFileEndsWith(const string& dirname, const char* suffix,
         int dlen = strlen(dentry->d_name);
         if (TextEndsWith(dentry->d_name, dlen, suffix, slen)) {
             const string fpath = dirname + "/" + string(dentry->d_name, dlen);
-            auto ret_pair = file_set->insert(
-                std::move(RemoveDotAndDotDot(fpath)));
+            auto ret_pair = file_set->insert(RemoveDotAndDotDot(fpath));
             if (!ret_pair.second) {
                 cerr << "duplicated source file [" << fpath << "]" << endl;
             }
@@ -76,14 +75,12 @@ void Dependency::AddSourceFiles(const char* fpath) {
     } else {
         if (TextEndsWith(fname, flen, ".cpp", 4) ||
             TextEndsWith(fname, flen, ".cc", 3)) {
-            auto ret_pair = m_cpp_sources.insert(
-                std::move(RemoveDotAndDotDot(fpath)));
+            auto ret_pair = m_cpp_sources.insert(RemoveDotAndDotDot(fpath));
             if (!ret_pair.second) {
                 cerr << "duplicated source file [" << fpath << "]" << endl;
             }
         } else if (TextEndsWith(fname, flen, ".c", 2)) {
-            auto ret_pair = m_c_sources.insert(
-                std::move(RemoveDotAndDotDot(fpath)));
+            auto ret_pair = m_c_sources.insert(RemoveDotAndDotDot(fpath));
             if (!ret_pair.second) {
                 cerr << "duplicated source file [" << fpath << "]" << endl;
             }
@@ -121,7 +118,7 @@ void Dependency::AddIncludeDirectory(const char* name) {
     const unsigned int namelen = strlen(name);
     unsigned int chars_removed = TextTrim(name, namelen, '/');
     auto ret_pair = m_inc_dirs.insert(
-        std::move(RemoveDotAndDotDot(string(name, namelen - chars_removed))));
+        RemoveDotAndDotDot(string(name, namelen - chars_removed)));
     if (!ret_pair.second) {
         cerr << "AddIncludeDirectory(): duplicated include directory ["
              << name << "]" << endl;

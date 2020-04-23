@@ -19,6 +19,10 @@ public:
 private:
     unsigned long m_dep_counter;
     std::unordered_map<std::string, Target*> m_targets;
+
+private:
+    Project(const Project&);
+    Project& operator=(const Project&);
 };
 
 #endif

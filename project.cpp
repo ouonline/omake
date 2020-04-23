@@ -12,7 +12,7 @@ using namespace std;
 using namespace luacpp;
 
 Target* Project::CreateBinary(const char* name) {
-    auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
+    auto ret_pair = m_targets.insert(make_pair(name, nullptr));
     if (!ret_pair.second) {
         cerr << "duplcated binary name[" << name << "]" << endl;
         return nullptr;
@@ -23,7 +23,7 @@ Target* Project::CreateBinary(const char* name) {
 }
 
 Target* Project::CreateStaticLibrary(const char* name) {
-    auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
+    auto ret_pair = m_targets.insert(make_pair(name, nullptr));
     if (!ret_pair.second) {
         cerr << "duplcated static library name[" << name << "]" << endl;
         return nullptr;
@@ -34,7 +34,7 @@ Target* Project::CreateStaticLibrary(const char* name) {
 }
 
 Target* Project::CreateSharedLibrary(const char* name) {
-    auto ret_pair = m_targets.insert(std::move(make_pair(name, nullptr)));
+    auto ret_pair = m_targets.insert(make_pair(name, nullptr));
     if (!ret_pair.second) {
         cerr << "duplcated shared library name[" << name << "]" << endl;
         return nullptr;
@@ -111,8 +111,7 @@ static void GenerateDepTree(const Target* target,
     list<DepTreeNode*> q;
 
     auto handle_lib = [&q, &dep_tree] (const LibInfo& lib) -> DepTreeNode* {
-        auto ret_pair = dep_tree->insert(
-            std::move(make_pair(lib, DepTreeNode(lib))));
+        auto ret_pair = dep_tree->insert(make_pair(lib, DepTreeNode(lib)));
         auto node = &ret_pair.first->second;
 
         if (ret_pair.second) {
@@ -216,7 +215,7 @@ static void CalcInDegree(const Target* target,
     target->ForEachDependency([&dep_tree, &q, &node2in] (const Dependency* dep) {
         dep->ForEachLibrary([&dep_tree, &q, &node2in] (const LibInfo& lib) {
             auto ref = dep_tree.find(lib);
-            auto ret_pair = node2in->insert(std::move(make_pair(&ref->second, 0)));
+            auto ret_pair = node2in->insert(make_pair(&ref->second, 0));
             ++ret_pair.first->second;
             if (ret_pair.second) {
                 q.push_back(&ref->second);
@@ -229,7 +228,7 @@ static void CalcInDegree(const Target* target,
         q.pop_front();
 
         for (auto dep : parent->deps) {
-            auto ret_pair = node2in->insert(std::move(make_pair(dep, 0)));
+            auto ret_pair = node2in->insert(make_pair(dep, 0));
             ++ret_pair.first->second;
             if (ret_pair.second) {
                 q.push_back(dep);
@@ -322,7 +321,7 @@ static string GeneratePhonyBuildInfo(const Target* target,
         const LibInfo& lib = iter->lib;
         if ((!IsLocalLib(lib)) && (!IsSysLib(lib)) && (!IsThirdPartyLib(lib))) {
             auto ret_pair = node2label->insert(
-                std::move(make_pair(lib, label_prefix + std::to_string(node2label->size()))));
+                make_pair(lib, label_prefix + std::to_string(node2label->size())));
             if (ret_pair.second) {
                 const string target_name = (lib.type == OMAKE_TYPE_STATIC)
                     ? ("lib" + lib.name + ".a")
@@ -364,7 +363,7 @@ static string GenerateDepInc(const Dependency* dep,
         auto parent = q.front();
         q.pop_front();
 
-        inc_dedup.insert(std::move(GetParentDir(parent->lib.path)));
+        inc_dedup.insert(GetParentDir(parent->lib.path));
         for (auto inc : parent->inc_dirs) {
             inc_dedup.insert(inc);
         }

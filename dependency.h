@@ -6,7 +6,7 @@
 #include <functional>
 #include <unordered_set>
 
-struct LibInfo {
+struct LibInfo final {
     int type;
     std::string path; // null path means sys lib
     std::string name;
@@ -53,6 +53,10 @@ private:
     std::unordered_set<std::string> m_cpp_sources;
     std::unordered_set<std::string> m_inc_dirs;
     std::vector<LibInfo> m_libs; // keep order of insertion
+
+private:
+    Dependency(const Dependency&);
+    Dependency& operator=(const Dependency&);
 };
 
 #endif
