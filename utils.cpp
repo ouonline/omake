@@ -88,7 +88,8 @@ static int l_AddFlags(lua_State* l) {
         dep->AddFlag(lua_tostring(l, i));
     }
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 static int l_AddSourceFiles(lua_State* l) {
@@ -98,14 +99,16 @@ static int l_AddSourceFiles(lua_State* l) {
         dep->AddSourceFiles(lua_tostring(l, i));
     }
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 static int l_AddStaticLibrary(lua_State* l) {
     int argc = lua_gettop(l);
     if (argc != 3) {
         cerr << "AddStaticLibrary() requires 2 arguments: `path` and `name`." << endl;
-        return 0;
+        lua_pushvalue(l, 1);
+        return 1;
     }
 
     auto dep = *((Dependency**)lua_touserdata(l, 1));
@@ -113,14 +116,16 @@ static int l_AddStaticLibrary(lua_State* l) {
                     lua_tostring(l, 3), // name
                     OMAKE_TYPE_STATIC);
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 static int l_AddSharedLibrary(lua_State* l) {
     int argc = lua_gettop(l);
     if (argc != 3) {
         cerr << "AddSharedLibrary() requires 2 arguments: `path` and `name`." << endl;
-        return 0;
+        lua_pushvalue(l, 1);
+        return 1;
     }
 
     auto dep = *((Dependency**)lua_touserdata(l, 1));
@@ -128,7 +133,8 @@ static int l_AddSharedLibrary(lua_State* l) {
                     lua_tostring(l, 3), // name
                     OMAKE_TYPE_SHARED);
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 static int l_AddSysLibraries(lua_State* l) {
@@ -140,7 +146,8 @@ static int l_AddSysLibraries(lua_State* l) {
                         OMAKE_TYPE_SHARED);
     }
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 static int l_AddIncludeDirectories(lua_State* l) {
@@ -150,7 +157,8 @@ static int l_AddIncludeDirectories(lua_State* l) {
         dep->AddIncludeDirectory(lua_tostring(l, i));
     }
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 static int l_TargetAddDependencies(lua_State* l) {
@@ -161,7 +169,8 @@ static int l_TargetAddDependencies(lua_State* l) {
         target->AddDependency(d);
     }
 
-    return 0;
+    lua_pushvalue(l, 1);
+    return 1;
 }
 
 void InitLuaEnv(LuaState* l) {

@@ -1,12 +1,12 @@
 project = CreateProject()
 
 dep = project:CreateDependency()
-dep:AddSourceFiles("*.cpp")
-dep:AddFlags("-Wall", "-Werror", "-Wextra")
-dep:AddStaticLibrary("../lua-cpp", "luacpp_static")
-dep:AddStaticLibrary("../text-utils", "text_utils_static")
+    :AddSourceFiles("*.cpp")
+    :AddFlags("-Wall", "-Werror", "-Wextra")
+    :AddStaticLibrary("../lua-cpp", "luacpp_static")
+    :AddStaticLibrary("../text-utils", "text_utils_static")
 
-omake = project:CreateBinary("omake")
-omake:AddDependencies(dep)
+project:CreateBinary("omake")
+    :AddDependencies(dep)
 
 return project
