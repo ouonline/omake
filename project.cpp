@@ -106,6 +106,24 @@ static bool InsertDepNode(const DepTreeNode* dep, vector<const DepTreeNode*>* de
     return true;
 }
 
+class ProjectHelper final : public LuaFunctionHelper {
+public:
+    ProjectHelper(const function<bool (int)>& before_proc,
+                  const function<bool (int, const LuaObject&)>& proc)
+        : m_before_proc(before_proc), m_proc(proc) {}
+    bool BeforeProcess(int nresults) override {
+        return m_before_proc(nresults);
+    }
+    bool Process(int i, const LuaObject& obj) override {
+        return m_proc(i, obj);
+    }
+    void AfterProcess() override {}
+
+private:
+    function<bool (int)> m_before_proc;
+    function<bool (int, const LuaObject&)> m_proc;
+};
+
 static void GenerateDepTree(const Target* target,
                             unordered_map<LibInfo, DepTreeNode, LibInfoHash>* dep_tree) {
     list<DepTreeNode*> q;
@@ -144,7 +162,7 @@ static void GenerateDepTree(const Target* target,
         };
 
         auto proc = [&parent, &handle_lib] (int, const LuaObject& obj) -> bool {
-            auto project = obj.touserdata().object<Project>();
+            auto project = obj.ToUserData().Get<Project>();
             auto target = project->FindTarget(parent->lib.name);
             if (!target) {
                 return true;
@@ -180,7 +198,8 @@ static void GenerateDepTree(const Target* target,
         InitLuaEnv(&l);
 
         string errmsg;
-        bool ok = l.dofile(omake_file.c_str(), &errmsg, before_proc, proc);
+        ProjectHelper helper(before_proc, proc);
+        bool ok = l.DoFile(omake_file.c_str(), &errmsg, &helper);
         if (!ok) {
             cerr << "Preprocessing dependency [" << omake_file << "] failed: "
                  << errmsg << endl;
@@ -390,7 +409,7 @@ static string GenerateDepInc(const Dependency* dep,
 static string GenerateObjectName(const string& src, const string& dep_name,
                                  size_t seq) {
     auto base_name = GetBaseName(src);
-    if (base_name.size() != src.size()) { // srcs not in current dir
+    if (base_name.size() != src.size()) { // `src` is not in current dir
         return dep_name + "." + std::to_string(seq) + "." + base_name + ".o";
     }
 

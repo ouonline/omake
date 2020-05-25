@@ -161,7 +161,7 @@ static int l_AddIncludeDirectories(lua_State* l) {
     return 1;
 }
 
-static int l_TargetAddDependencies(lua_State* l) {
+static int l_AddDependencies(lua_State* l) {
     int argc = lua_gettop(l);
     auto target = *((Target**)lua_touserdata(l, 1));
     for (int i = argc; i >= 2; --i) {
@@ -174,22 +174,22 @@ static int l_TargetAddDependencies(lua_State* l) {
 }
 
 void InitLuaEnv(LuaState* l) {
-    l->newfunction(CreateProject, "CreateProject");
+    l->CreateFunction(CreateProject, "CreateProject");
 
-    l->newclass<Project>("Project")
-        .set("CreateBinary", &Project::CreateBinary)
-        .set("CreateStaticLibrary", &Project::CreateStaticLibrary)
-        .set("CreateSharedLibrary", &Project::CreateSharedLibrary)
-        .set("CreateDependency", &Project::CreateDependency);
+    l->CreateClass<Project>("Project")
+        .Set("CreateBinary", &Project::CreateBinary)
+        .Set("CreateStaticLibrary", &Project::CreateStaticLibrary)
+        .Set("CreateSharedLibrary", &Project::CreateSharedLibrary)
+        .Set("CreateDependency", &Project::CreateDependency);
 
-    l->newclass<Dependency>("Dependency")
-        .set("AddFlags", l_AddFlags)
-        .set("AddSourceFiles", l_AddSourceFiles)
-        .set("AddStaticLibrary", l_AddStaticLibrary)
-        .set("AddSharedLibrary", l_AddSharedLibrary)
-        .set("AddSysLibraries", l_AddSysLibraries)
-        .set("AddIncludeDirectories", l_AddIncludeDirectories);
+    l->CreateClass<Dependency>("Dependency")
+        .Set("AddFlags", l_AddFlags)
+        .Set("AddSourceFiles", l_AddSourceFiles)
+        .Set("AddStaticLibrary", l_AddStaticLibrary)
+        .Set("AddSharedLibrary", l_AddSharedLibrary)
+        .Set("AddSysLibraries", l_AddSysLibraries)
+        .Set("AddIncludeDirectories", l_AddIncludeDirectories);
 
-    l->newclass<Target>("Target")
-        .set("AddDependencies", l_TargetAddDependencies);
+    l->CreateClass<Target>("Target")
+        .Set("AddDependencies", l_AddDependencies);
 }
