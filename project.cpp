@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <list>
 #include <unistd.h> // access()
+#include <cstring> // strerror()
 using namespace std;
 
 #include "lua-cpp/luacpp.h"
@@ -124,6 +125,40 @@ private:
     function<bool (int, const LuaObject&)> m_proc;
 };
 
+static bool ProcessOMakeProject(const string& dir, ProjectHelper* helper) {
+#define MAX_PATH_LEN 4096
+    LuaState l;
+    InitLuaEnv(&l);
+
+    char cur_path[MAX_PATH_LEN];
+    if (!getcwd(cur_path, MAX_PATH_LEN)) {
+        cerr << "path too long" << endl;
+        return false;
+    }
+
+    if (chdir(dir.c_str()) != 0) {
+        cerr << "chdir to [" << dir << "] failed: "
+             << strerror(errno) << endl;
+        return false;
+    }
+
+    string errmsg;
+    bool ok = l.DoFile("omake.lua", &errmsg, helper);
+    if (!ok) {
+        cerr << "Preprocessing dependency [" << dir << "/omake.lua] failed: "
+             << errmsg << endl;
+    }
+
+    if (chdir(cur_path) != 0) {
+        cerr << "chdir to [" << cur_path << "] failed: "
+             << strerror(errno) << endl;
+        return false;
+    }
+
+    return ok;
+#undef MAX_PATH_LEN
+}
+
 static void GenerateDepTree(const Target* target,
                             unordered_map<LibInfo, DepTreeNode, LibInfoHash>* dep_tree) {
     list<DepTreeNode*> q;
@@ -194,16 +229,8 @@ static void GenerateDepTree(const Target* target,
             return true;
         };
 
-        LuaState l;
-        InitLuaEnv(&l);
-
-        string errmsg;
         ProjectHelper helper(before_proc, proc);
-        bool ok = l.DoFile(omake_file.c_str(), &errmsg, &helper);
-        if (!ok) {
-            cerr << "Preprocessing dependency [" << omake_file << "] failed: "
-                 << errmsg << endl;
-        }
+        ProcessOMakeProject(parent->lib.path, &helper);
     }
 }
 

@@ -20,7 +20,7 @@ omake_phony_0:
 
 .PHONY: omake_phony_1
 omake_phony_1:
-	$(MAKE) debug=$(debug) libtext_utils_static.a -C ../text-utils
+	$(MAKE) debug=$(debug) libcpputils_static.a -C ../cpputils
 
 omake_dep_0_INCLUDE := -I../../../lua -I..
 
@@ -41,7 +41,7 @@ omake_dep_0.project.cpp.o: project.cpp
 
 omake_OBJS := omake_dep_0.project.cpp.o omake_dep_0.target.cpp.o omake_dep_0.dependency.cpp.o omake_dep_0.main.cpp.o omake_dep_0.utils.cpp.o
 
-omake_LIBS := ../lua-cpp/libluacpp_static.a ../text-utils/libtext_utils_static.a ../../../lua/src/liblua.a
+omake_LIBS := ../lua-cpp/libluacpp_static.a ../cpputils/libcpputils_static.a ../../../lua/src/liblua.a
 
 omake: $(omake_OBJS) | omake_phony_1 omake_phony_0
 	$(CXX) $(CXXFLAGS) -Wextra -Werror -Wall -o $@ $^ $(omake_LIBS)
@@ -51,5 +51,5 @@ clean:
 
 distclean:
 	$(MAKE) clean
-	$(MAKE) distclean -C ../text-utils
+	$(MAKE) distclean -C ../cpputils
 	$(MAKE) distclean -C ../lua-cpp

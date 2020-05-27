@@ -6,14 +6,15 @@
 #include <cstring> // strerror()
 using namespace std;
 
-#include "text-utils/text_utils.h"
+#include "cpputils/text_utils.h"
 using namespace outils;
 
 static void AddFileEndsWith(const string& dirname, const char* suffix,
                             std::unordered_set<string>* file_set) {
     DIR* dirp = opendir(dirname.c_str());
     if (!dirp) {
-        cerr << "opendir [" << dirname << "] failed: " << strerror(errno) << endl;
+        cerr << "Dependency opendir [" << dirname << "] failed: "
+             << strerror(errno) << endl;
         return;
     }
 

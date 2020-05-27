@@ -1,6 +1,6 @@
 #include "project.h"
 #include "target.h"
-#include "text-utils/text_utils.h"
+#include "cpputils/text_utils.h"
 #include "common.h"
 #include <iostream>
 using namespace std;
