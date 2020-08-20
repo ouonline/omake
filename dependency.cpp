@@ -96,7 +96,7 @@ static bool EmplaceLibInfo(LibInfo&& lib, vector<LibInfo>* libs) {
         }
     }
 
-    libs->push_back(lib);
+    libs->push_back(std::move(lib));
     return true;
 }
 

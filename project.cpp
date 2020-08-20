@@ -163,12 +163,12 @@ static void GenerateDepTree(const Target* target,
                             unordered_map<LibInfo, DepTreeNode, LibInfoHash>* dep_tree) {
     list<DepTreeNode*> q;
 
-    auto handle_lib = [&q, &dep_tree] (const LibInfo& lib) -> DepTreeNode* {
+    auto handle_lib = [&q, &dep_tree] (const LibInfo& lib, bool is_third_party) -> DepTreeNode* {
         auto ret_pair = dep_tree->insert(make_pair(lib, DepTreeNode(lib)));
         auto node = &ret_pair.first->second;
 
         if (ret_pair.second) {
-            if (!IsSysLib(lib) && !IsThirdPartyLib(lib)) {
+            if ((!IsSysLib(lib)) && (!is_third_party)) {
                 q.push_back(node);
             }
         }
@@ -178,7 +178,7 @@ static void GenerateDepTree(const Target* target,
 
     target->ForEachDependency([&handle_lib] (const Dependency* dep) {
         dep->ForEachLibrary([&handle_lib] (const LibInfo& lib) {
-            handle_lib(lib);
+            handle_lib(lib, IsThirdPartyLib(lib));
         });
     });
 
@@ -206,13 +206,14 @@ static void GenerateDepTree(const Target* target,
             target->ForEachDependency([&parent, &handle_lib] (const Dependency* dep) {
                 dep->ForEachLibrary([&parent, &handle_lib] (const LibInfo& lib) {
                     string new_path;
+                    bool is_third_party = IsThirdPartyLib(lib);
                     if ((!lib.path.empty()) && lib.path[0] != '/') {
                         new_path = RemoveDotAndDotDot(parent->lib.path + "/" + lib.path);
                     } else {
                         new_path = lib.path;
                     }
 
-                    auto node = handle_lib(LibInfo(new_path, lib.name, lib.type));
+                    auto node = handle_lib(LibInfo(new_path, lib.name, lib.type), is_third_party);
                     InsertDepNode(node, &parent->deps);
                 });
 
