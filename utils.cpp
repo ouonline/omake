@@ -176,13 +176,13 @@ static int l_AddDependencies(lua_State* l) {
 void InitLuaEnv(LuaState* l) {
     l->CreateFunction(CreateProject, "CreateProject");
 
-    l->CreateClass<Project>("Project")
+    l->RegisterClass<Project>()
         .Set("CreateBinary", &Project::CreateBinary)
         .Set("CreateStaticLibrary", &Project::CreateStaticLibrary)
         .Set("CreateSharedLibrary", &Project::CreateSharedLibrary)
         .Set("CreateDependency", &Project::CreateDependency);
 
-    l->CreateClass<Dependency>("Dependency")
+    l->RegisterClass<Dependency>()
         .Set("AddFlags", l_AddFlags)
         .Set("AddSourceFiles", l_AddSourceFiles)
         .Set("AddStaticLibrary", l_AddStaticLibrary)
@@ -190,6 +190,6 @@ void InitLuaEnv(LuaState* l) {
         .Set("AddSysLibraries", l_AddSysLibraries)
         .Set("AddIncludeDirectories", l_AddIncludeDirectories);
 
-    l->CreateClass<Target>("Target")
+    l->RegisterClass<Target>()
         .Set("AddDependencies", l_AddDependencies);
 }
