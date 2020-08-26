@@ -77,10 +77,6 @@ string GetBaseName(const string& path) {
 
 /* -------------------------------------------------------------------------- */
 
-static Project* CreateProject() {
-    return new Project();
-}
-
 static int l_AddFlags(lua_State* l) {
     int argc = lua_gettop(l);
     auto dep = *((Dependency**)lua_touserdata(l, 1));
@@ -174,9 +170,8 @@ static int l_AddDependencies(lua_State* l) {
 }
 
 void InitLuaEnv(LuaState* l) {
-    l->CreateFunction(CreateProject, "CreateProject");
-
-    l->RegisterClass<Project>()
+    l->RegisterClass<Project>("Project")
+        .SetConstructor()
         .Set("CreateBinary", &Project::CreateBinary)
         .Set("CreateStaticLibrary", &Project::CreateStaticLibrary)
         .Set("CreateSharedLibrary", &Project::CreateSharedLibrary)

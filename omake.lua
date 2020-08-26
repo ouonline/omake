@@ -1,4 +1,4 @@
-project = CreateProject()
+project = Project()
 
 project:CreateBinary("omake"):AddDependencies(
     project:CreateDependency()
