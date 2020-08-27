@@ -323,17 +323,23 @@ static string GenerateTargetDepLibs(const Target* target,
     TopologicalSort(target, dep_tree, node2in, &dep_list);
 
     string content;
+    unordered_set<string> link_path_dedup;
+
     for (auto dep : dep_list) {
         const LibInfo& lib = dep->lib;
         if (lib.type == OMAKE_TYPE_STATIC) {
             content += " " + lib.path + "/lib" + lib.name + ".a";
         } else if (lib.type == OMAKE_TYPE_SHARED) {
             if (!IsSysLib(lib)) {
-                content += " -L" + lib.path;
+                auto ret_pair = link_path_dedup.insert(lib.path);
+                if (ret_pair.second) {
+                    content += " -L" + lib.path;
+                }
             }
             content += " -l" + lib.name;
         }
     }
+
     return content;
 }
 
