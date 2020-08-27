@@ -77,11 +77,40 @@ string GetBaseName(const string& path) {
 
 /* -------------------------------------------------------------------------- */
 
-static int l_AddFlags(lua_State* l) {
+static int GenericGetItems(lua_State* l, const function<void (lua_State* l, int index)>& f) {
     int argc = lua_gettop(l);
-    auto dep = *((Dependency**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        dep->AddFlag(lua_tostring(l, i));
+    if (argc != 2) {
+        return -1;
+    }
+
+    if (!lua_istable(l, 2)) {
+        f(l, 2);
+        return 0;
+    }
+
+    lua_pushnil(l);
+    while (lua_next(l, -2) != 0) {
+        f(l, -1);
+        lua_pop(l, 1);
+    }
+
+    return 0;
+}
+
+static int l_AddFlags(lua_State* l) {
+    // push flags in written order
+    vector<string> flags;
+    int ret = GenericGetItems(l, [&flags] (lua_State* l, int index) {
+        flags.push_back(lua_tostring(l, index));
+    });
+
+    if (ret == -1) {
+        cerr << "AddFlags() takes exactly 1 argument: a flag or a table containing flag(s)." << endl;
+    } else {
+        auto dep = *((Dependency**)lua_touserdata(l, 1));
+        for (auto it = flags.rbegin(); it != flags.rend(); ++it) {
+            dep->AddFlag(it->c_str());
+        }
     }
 
     lua_pushvalue(l, 1);
@@ -89,10 +118,19 @@ static int l_AddFlags(lua_State* l) {
 }
 
 static int l_AddSourceFiles(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto dep = *((Dependency**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        dep->AddSourceFiles(lua_tostring(l, i));
+    // push files in written order
+    vector<string> files;
+    int ret = GenericGetItems(l, [&files] (lua_State* l, int index) {
+        files.push_back(lua_tostring(l, index));
+    });
+
+    if (ret == -1) {
+        cerr << "AddSourceFiles() takes exactly 1 argument: a file or a table containing file(s)." << endl;
+    } else {
+        auto dep = *((Dependency**)lua_touserdata(l, 1));
+        for (auto it = files.rbegin(); it != files.rend(); ++it) {
+            dep->AddSourceFiles(it->c_str());
+        }
     }
 
     lua_pushvalue(l, 1);
@@ -134,12 +172,19 @@ static int l_AddSharedLibrary(lua_State* l) {
 }
 
 static int l_AddSysLibraries(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto dep = *((Dependency**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        dep->AddLibrary(nullptr, // path
-                        lua_tostring(l, i), // name
-                        OMAKE_TYPE_SHARED);
+    // push libs in written order
+    vector<string> libs;
+    int ret = GenericGetItems(l, [&libs] (lua_State* l, int index) {
+        libs.push_back(lua_tostring(l, index));
+    });
+
+    if (ret == -1) {
+        cerr << "AddSysLibraries() takes exactly 1 argument: a lib or a table containing lib(s)." << endl;
+    } else {
+        auto dep = *((Dependency**)lua_touserdata(l, 1));
+        for (auto it = libs.rbegin(); it != libs.rend(); ++it) {
+            dep->AddLibrary(nullptr, it->c_str(), OMAKE_TYPE_SHARED);
+        }
     }
 
     lua_pushvalue(l, 1);
@@ -147,10 +192,19 @@ static int l_AddSysLibraries(lua_State* l) {
 }
 
 static int l_AddIncludeDirectories(lua_State* l) {
-    int argc = lua_gettop(l);
-    auto dep = *((Dependency**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        dep->AddIncludeDirectory(lua_tostring(l, i));
+    // push dirs in written order
+    vector<string> dirs;
+    int ret = GenericGetItems(l, [&dirs] (lua_State* l, int index) {
+        dirs.push_back(lua_tostring(l, index));
+    });
+
+    if (ret == -1) {
+        cerr << "AddIncludeDirectories() takes exactly 1 argument: a dir or a table containing dir(s)." << endl;
+    } else {
+        auto dep = *((Dependency**)lua_touserdata(l, 1));
+        for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) {
+            dep->AddIncludeDirectory(it->c_str());
+        }
     }
 
     lua_pushvalue(l, 1);
@@ -158,11 +212,14 @@ static int l_AddIncludeDirectories(lua_State* l) {
 }
 
 static int l_AddDependencies(lua_State* l) {
-    int argc = lua_gettop(l);
     auto target = *((Target**)lua_touserdata(l, 1));
-    for (int i = argc; i >= 2; --i) {
-        auto d = *(Dependency**)lua_touserdata(l, i);
+    int ret = GenericGetItems(l, [&target] (lua_State* l, int index) {
+        auto d = *(Dependency**)lua_touserdata(l, index);
         target->AddDependency(d);
+    });
+
+    if (ret == -1) {
+        cerr << "AddDependencies() takes exactly 1 argument: a dep or a table containing dep(s)." << endl;
     }
 
     lua_pushvalue(l, 1);
