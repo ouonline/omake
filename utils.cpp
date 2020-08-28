@@ -77,14 +77,15 @@ string GetBaseName(const string& path) {
 
 /* -------------------------------------------------------------------------- */
 
-static int GenericGetItems(lua_State* l, const function<void (lua_State* l, int index)>& f) {
+static int GenericGetItems(lua_State* l, int expected_argc,
+                           const function<void (lua_State* l, int index)>& f) {
     int argc = lua_gettop(l);
-    if (argc != 2) {
+    if (argc != expected_argc) {
         return -1;
     }
 
-    if (!lua_istable(l, 2)) {
-        f(l, 2);
+    if (!lua_istable(l, expected_argc)) {
+        f(l, expected_argc);
         return 0;
     }
 
@@ -100,7 +101,7 @@ static int GenericGetItems(lua_State* l, const function<void (lua_State* l, int 
 static int l_AddFlags(lua_State* l) {
     // push flags in written order
     vector<string> flags;
-    int ret = GenericGetItems(l, [&flags] (lua_State* l, int index) {
+    int ret = GenericGetItems(l, 2, [&flags] (lua_State* l, int index) {
         flags.push_back(lua_tostring(l, index));
     });
 
@@ -120,7 +121,7 @@ static int l_AddFlags(lua_State* l) {
 static int l_AddSourceFiles(lua_State* l) {
     // push files in written order
     vector<string> files;
-    int ret = GenericGetItems(l, [&files] (lua_State* l, int index) {
+    int ret = GenericGetItems(l, 2, [&files] (lua_State* l, int index) {
         files.push_back(lua_tostring(l, index));
     });
 
@@ -137,35 +138,41 @@ static int l_AddSourceFiles(lua_State* l) {
     return 1;
 }
 
-static int l_AddStaticLibrary(lua_State* l) {
-    int argc = lua_gettop(l);
-    if (argc != 3) {
-        cerr << "AddStaticLibrary() requires 2 arguments: `path` and `name`." << endl;
-        lua_pushvalue(l, 1);
-        return 1;
-    }
+static int l_AddStaticLibraries(lua_State* l) {
+    // push libs in written order
+    vector<string> libs;
+    int ret = GenericGetItems(l, 3, [&libs] (lua_State* l, int index) {
+        libs.push_back(lua_tostring(l, index));
+    });
 
-    auto dep = *((Dependency**)lua_touserdata(l, 1));
-    dep->AddLibrary(lua_tostring(l, 2), // path
-                    lua_tostring(l, 3), // name
-                    OMAKE_TYPE_STATIC);
+    if (ret == -1) {
+        cerr << "AddStaticLibraries() requires 2 arguments: path and name(s)." << endl;
+    } else {
+        auto dep = *((Dependency**)lua_touserdata(l, 1));
+        for (auto it = libs.rbegin(); it != libs.rend(); ++it) {
+            dep->AddLibrary(lua_tostring(l, 2), it->c_str(), OMAKE_TYPE_STATIC);
+        }
+    }
 
     lua_pushvalue(l, 1);
     return 1;
 }
 
-static int l_AddSharedLibrary(lua_State* l) {
-    int argc = lua_gettop(l);
-    if (argc != 3) {
-        cerr << "AddSharedLibrary() requires 2 arguments: `path` and `name`." << endl;
-        lua_pushvalue(l, 1);
-        return 1;
-    }
+static int l_AddSharedLibraries(lua_State* l) {
+    // push libs in written order
+    vector<string> libs;
+    int ret = GenericGetItems(l, 3, [&libs] (lua_State* l, int index) {
+        libs.push_back(lua_tostring(l, index));
+    });
 
-    auto dep = *((Dependency**)lua_touserdata(l, 1));
-    dep->AddLibrary(lua_tostring(l, 2), // path
-                    lua_tostring(l, 3), // name
-                    OMAKE_TYPE_SHARED);
+    if (ret == -1) {
+        cerr << "AddSharedLibraries() requires 2 arguments: path and name(s)." << endl;
+    } else {
+        auto dep = *((Dependency**)lua_touserdata(l, 1));
+        for (auto it = libs.rbegin(); it != libs.rend(); ++it) {
+            dep->AddLibrary(lua_tostring(l, 2), it->c_str(), OMAKE_TYPE_SHARED);
+        }
+    }
 
     lua_pushvalue(l, 1);
     return 1;
@@ -174,7 +181,7 @@ static int l_AddSharedLibrary(lua_State* l) {
 static int l_AddSysLibraries(lua_State* l) {
     // push libs in written order
     vector<string> libs;
-    int ret = GenericGetItems(l, [&libs] (lua_State* l, int index) {
+    int ret = GenericGetItems(l, 2, [&libs] (lua_State* l, int index) {
         libs.push_back(lua_tostring(l, index));
     });
 
@@ -194,7 +201,7 @@ static int l_AddSysLibraries(lua_State* l) {
 static int l_AddIncludeDirectories(lua_State* l) {
     // push dirs in written order
     vector<string> dirs;
-    int ret = GenericGetItems(l, [&dirs] (lua_State* l, int index) {
+    int ret = GenericGetItems(l, 2, [&dirs] (lua_State* l, int index) {
         dirs.push_back(lua_tostring(l, index));
     });
 
@@ -213,7 +220,7 @@ static int l_AddIncludeDirectories(lua_State* l) {
 
 static int l_AddDependencies(lua_State* l) {
     auto target = *((Target**)lua_touserdata(l, 1));
-    int ret = GenericGetItems(l, [&target] (lua_State* l, int index) {
+    int ret = GenericGetItems(l, 2, [&target] (lua_State* l, int index) {
         auto d = *(Dependency**)lua_touserdata(l, index);
         target->AddDependency(d);
     });
@@ -237,8 +244,8 @@ void InitLuaEnv(LuaState* l) {
     l->RegisterClass<Dependency>()
         .Set("AddFlags", l_AddFlags)
         .Set("AddSourceFiles", l_AddSourceFiles)
-        .Set("AddStaticLibrary", l_AddStaticLibrary)
-        .Set("AddSharedLibrary", l_AddSharedLibrary)
+        .Set("AddStaticLibraries", l_AddStaticLibraries)
+        .Set("AddSharedLibraries", l_AddSharedLibraries)
         .Set("AddSysLibraries", l_AddSysLibraries)
         .Set("AddIncludeDirectories", l_AddIncludeDirectories);
 
