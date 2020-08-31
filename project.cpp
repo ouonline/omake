@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <list>
 #include <unistd.h> // access()
 #include <cstring> // strerror()
@@ -92,7 +93,7 @@ struct DepTreeNode {
     DepTreeNode(const LibInfo& _lib) : lib(_lib) {}
 
     LibInfo lib;
-    unordered_set<string> inc_dirs;
+    set<string> inc_dirs;
     vector<const DepTreeNode*> deps; // keep order of insertion
 };
 
@@ -442,7 +443,9 @@ static string GenerateDepInc(const Dependency* dep,
 
 static string GenerateObjectName(const string& src, const string& dep_name,
                                  size_t seq) {
-    auto base_name = GetBaseName(src);
+    const int offset = FindParentDirPos(src.data(), src.size()) + 1;
+    const string base_name = src.substr(offset);
+
     if (base_name.size() != src.size()) { // `src` is not in current dir
         return dep_name + "." + std::to_string(seq) + "." + base_name + ".o";
     }
@@ -548,18 +551,18 @@ static string GetGeneratedName(const Target* target) {
 }
 
 static string CollectFlagsForTarget(const Target* target) {
+    string content;
     unordered_set<string> dedup;
 
-    target->ForEachDependency([&dedup] (const Dependency* dep) {
-        dep->ForEachFlag([&dedup] (const string& flag) {
-            dedup.insert(flag);
+    target->ForEachDependency([&content, &dedup] (const Dependency* dep) {
+        dep->ForEachFlag([&content, &dedup] (const string& flag) {
+            auto ret_pair = dedup.insert(flag);
+            if (ret_pair.second) {
+                content += " " + flag;
+            }
         });
     });
 
-    string content;
-    for (auto flag : dedup) {
-        content += " " + flag;
-    }
     return content;
 }
 

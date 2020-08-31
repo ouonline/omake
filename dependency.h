@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <functional>
-#include <unordered_set>
+#include <set>
 
 struct LibInfo final {
     int type;
@@ -48,10 +48,10 @@ public:
 
 private:
     std::string m_name;
-    std::unordered_set<std::string> m_flags;
-    std::unordered_set<std::string> m_c_sources;
-    std::unordered_set<std::string> m_cpp_sources;
-    std::unordered_set<std::string> m_inc_dirs;
+    std::set<std::string> m_c_sources;
+    std::set<std::string> m_cpp_sources;
+    std::set<std::string> m_inc_dirs;
+    std::vector<std::string> m_flags;
     std::vector<LibInfo> m_libs; // keep order of insertion
 
 private:

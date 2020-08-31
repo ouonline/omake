@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <iostream>
+#include <algorithm>
 #include <cstring> // strerror()
 using namespace std;
 
@@ -10,7 +11,7 @@ using namespace std;
 using namespace outils;
 
 static void AddFileEndsWith(const string& dirname, const char* suffix,
-                            std::unordered_set<string>* file_set) {
+                            set<string>* file_set) {
     DIR* dirp = opendir(dirname.c_str());
     if (!dirp) {
         cerr << "Dependency opendir [" << dirname << "] failed: "
@@ -34,20 +35,11 @@ static void AddFileEndsWith(const string& dirname, const char* suffix,
     closedir(dirp);
 }
 
-static int FindParentDirPos(const char* fpath) {
-    int plen = strlen(fpath) - 1;
-    while (plen >= 0) {
-        if (fpath[plen] == '/') {
-            return plen;
-        }
-        --plen;
-    }
-    return -1;
-}
-
 void Dependency::AddFlag(const char* flag) {
-    auto ret_pair = m_flags.insert(flag);
-    if (!ret_pair.second) {
+    auto it = std::find(m_flags.begin(), m_flags.end(), string(flag));
+    if (it == m_flags.end()) {
+        m_flags.push_back(flag);
+    } else {
         cerr << "AddFlag(): duplicated flag [" << flag << "]" << endl;
     }
 }
@@ -56,7 +48,7 @@ void Dependency::AddSourceFiles(const char* fpath) {
     string parent_dir;
     const char* fname = nullptr;
 
-    int offset = FindParentDirPos(fpath);
+    int offset = FindParentDirPos(fpath, strlen(fpath));
     if (offset >= 0) {
         parent_dir.assign(fpath, offset + 1);
         fname = fpath + offset + 1;

@@ -3,7 +3,7 @@
 
 #include "target.h"
 #include <vector>
-#include <unordered_map>
+#include <map>
 
 class Project final {
 public:
@@ -18,7 +18,7 @@ public:
 
 private:
     unsigned long m_dep_counter;
-    std::unordered_map<std::string, Target*> m_targets;
+    std::map<std::string, Target*> m_targets;
 
 private:
     Project(const Project&);

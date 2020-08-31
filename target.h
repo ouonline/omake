@@ -2,6 +2,7 @@
 #define __OMAKE_TARGET_H__
 
 #include "dependency.h"
+#include <vector>
 
 class Target final {
 public:
@@ -20,7 +21,7 @@ public:
 private:
     const int m_type;
     const std::string m_name;
-    std::unordered_set<const Dependency*> m_deps;
+    std::vector<const Dependency*> m_deps;
 
 private:
     Target(const Target&);

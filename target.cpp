@@ -1,11 +1,14 @@
 #include "target.h"
 #include "common.h"
 #include <iostream>
+#include <algorithm>
 using namespace std;
 
 void Target::AddDependency(const Dependency* dep) {
-    auto ret_pair = m_deps.insert(dep);
-    if (!ret_pair.second) {
+    auto it = std::find(m_deps.begin(), m_deps.end(), dep);
+    if (it == m_deps.end()) {
+        m_deps.push_back(dep);
+    } else {
         cerr << "AddDependency(): duplicated dependency ["
              << dep->GetName() << "]" << endl;
     }
