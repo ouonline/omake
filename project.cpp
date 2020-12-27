@@ -468,6 +468,9 @@ static string GenerateObjBuildInfo(const Target* target,
             flags += " " + flag;
         });
 
+        const string flag_var_name = dep->GetName() + "_FLAGS";
+        const string inc_var_name = dep->GetName() + "_INCS";
+
         string local_content;
         dep->ForEachCSource([&] (const string& src) {
             const string obj = GenerateObjectName(src, dep_name, obj_of_target->size());
@@ -475,9 +478,12 @@ static string GenerateObjBuildInfo(const Target* target,
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
                 local_content += obj + ": " + src + "\n" +
-                    "\t$(CC) $(CFLAGS)" + flags;
+                    "\t$(CC) $(CFLAGS)";
+                if (!flags.empty()) {
+                    local_content += " $(" + flag_var_name + ")";
+                }
                 if (!dep_inc_str.empty()) {
-                    local_content += " $(" + dep_name + "_INCLUDE)";
+                    local_content += " $(" + inc_var_name + ")";
                 }
                 local_content += " -c $< -o $@\n\n";
             }
@@ -489,9 +495,12 @@ static string GenerateObjBuildInfo(const Target* target,
             auto ret_pair = obj_dedup->insert(obj);
             if (ret_pair.second) {
                 local_content += obj + ": " + src + "\n" +
-                    "\t$(CXX) $(CXXFLAGS)" + flags;
+                    "\t$(CXX) $(CXXFLAGS)";
+                if (!flags.empty()) {
+                    local_content += " $(" + flag_var_name + ")";
+                }
                 if (!dep_inc_str.empty()) {
-                    local_content += " $(" + dep_name + "_INCLUDE)";
+                    local_content += " $(" + inc_var_name + ")";
                 }
                 local_content += " -c $< -o $@\n\n";
             }
@@ -499,7 +508,10 @@ static string GenerateObjBuildInfo(const Target* target,
 
         if (!local_content.empty()) {
             if (!dep_inc_str.empty()) {
-                content += dep_name + "_INCLUDE :=" + dep_inc_str + "\n\n";
+                content += inc_var_name + " :=" + dep_inc_str + "\n\n";
+            }
+            if (!flags.empty()) {
+                content += flag_var_name + " :=" + flags + "\n\n";
             }
             content += local_content;
         }
@@ -555,12 +567,7 @@ static string CollectFlagsForTarget(const Target* target) {
     unordered_set<string> dedup;
 
     target->ForEachDependency([&content, &dedup] (const Dependency* dep) {
-        dep->ForEachFlag([&content, &dedup] (const string& flag) {
-            auto ret_pair = dedup.insert(flag);
-            if (ret_pair.second) {
-                content += " " + flag;
-            }
-        });
+        content += " $(" + dep->GetName() + "_FLAGS)";
     });
 
     return content;
@@ -632,6 +639,8 @@ bool Project::GenerateMakefile(const string& fname) {
 
     for (auto iter : m_targets) {
         auto target = iter.second;
+        const string lib_var_name = target->GetName() + "_LIBS";
+        const string obj_var_name = target->GetName() + "_OBJS";
 
         unordered_map<const DepTreeNode*, int> node2in;
         CalcInDegree(target, dep_tree, &node2in);
@@ -641,18 +650,18 @@ bool Project::GenerateMakefile(const string& fname) {
         unordered_set<string> obj_of_target;
         content += GenerateObjBuildInfo(target, dep_tree, &obj_of_target, &obj_dedup);
 
-        content += target->GetName() + "_OBJS :=" + GenerateObjects(obj_of_target) + "\n\n";
+        content += obj_var_name + " :=" + GenerateObjects(obj_of_target) + "\n\n";
 
         string target_dep_libs;
         if (target->GetType() == OMAKE_TYPE_BINARY ||
             target->GetType() == OMAKE_TYPE_SHARED) {
             target_dep_libs = GenerateTargetDepLibs(target, dep_tree, &node2in);
             if (!target_dep_libs.empty()) {
-                content += target->GetName() + "_LIBS :=" + target_dep_libs + "\n\n";
+                content += lib_var_name + " :=" + target_dep_libs + "\n\n";
             }
         }
 
-        content += GetGeneratedName(target) + ": $(" + target->GetName() + "_OBJS)";
+        content += GetGeneratedName(target) + ": $(" + obj_var_name + ")";
 
         const string dep_label_str = GenerateTargetDepLabels(target, node2label);
         if (!dep_label_str.empty()) {
@@ -670,13 +679,13 @@ bool Project::GenerateMakefile(const string& fname) {
                     cmd = "$(CXX) $(CXXFLAGS)" + extra_flags +
                         " -o $@ $^";
                     if (!target_dep_libs.empty()) {
-                        cmd += " $(" + target->GetName() + "_LIBS)";
+                        cmd += " $(" + lib_var_name + ")";
                     }
                 } else if (target->HasCSource()) {
                     cmd = "$(CC) $(CFLAGS)" + extra_flags +
                         " -o $@ $^";
                     if (!target_dep_libs.empty()) {
-                        cmd += " $(" + target->GetName() + "_LIBS)";
+                        cmd += " $(" + lib_var_name + ")";
                     }
                 }
             } else if (target->GetType() == OMAKE_TYPE_SHARED) {
@@ -684,13 +693,13 @@ bool Project::GenerateMakefile(const string& fname) {
                     cmd = "$(CXX) $(CXXFLAGS)" + extra_flags +
                         " -shared -o $@ $^";
                     if (!target_dep_libs.empty()) {
-                        cmd += " $(" + target->GetName() + "_LIBS)";
+                        cmd += " $(" + lib_var_name + ")";
                     }
                 } else if (target->HasCSource()) {
                     cmd = "$(CC) $(CFLAGS)" + extra_flags +
                         " -shared -o $@ $^";
                     if (!target_dep_libs.empty()) {
-                        cmd += " $(" + target->GetName() + "_LIBS)";
+                        cmd += " $(" + lib_var_name + ")";
                     }
                 }
             }

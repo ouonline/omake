@@ -22,29 +22,31 @@ omake_phony_0:
 omake_phony_1:
 	$(MAKE) debug=$(debug) libcpputils_static.a -C ../cpputils
 
-omake_dep_0_INCLUDE := -I../../../lua -I..
+omake_dep_0_INCS := -I../../../lua -I..
+
+omake_dep_0_FLAGS := -Wall -Werror -Wextra
 
 omake_dep_0.dependency.cpp.o: dependency.cpp
-	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(omake_dep_0_FLAGS) $(omake_dep_0_INCS) -c $< -o $@
 
 omake_dep_0.main.cpp.o: main.cpp
-	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(omake_dep_0_FLAGS) $(omake_dep_0_INCS) -c $< -o $@
 
 omake_dep_0.project.cpp.o: project.cpp
-	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(omake_dep_0_FLAGS) $(omake_dep_0_INCS) -c $< -o $@
 
 omake_dep_0.target.cpp.o: target.cpp
-	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(omake_dep_0_FLAGS) $(omake_dep_0_INCS) -c $< -o $@
 
 omake_dep_0.utils.cpp.o: utils.cpp
-	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra $(omake_dep_0_INCLUDE) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(omake_dep_0_FLAGS) $(omake_dep_0_INCS) -c $< -o $@
 
 omake_OBJS := omake_dep_0.utils.cpp.o omake_dep_0.target.cpp.o omake_dep_0.project.cpp.o omake_dep_0.main.cpp.o omake_dep_0.dependency.cpp.o
 
 omake_LIBS := ../lua-cpp/libluacpp_static.a ../cpputils/libcpputils_static.a ../../../lua/src/liblua.a ../math/libmath_static.a
 
 omake: $(omake_OBJS) | omake_phony_1 omake_phony_0
-	$(CXX) $(CXXFLAGS) -Wall -Werror -Wextra -o $@ $^ $(omake_LIBS)
+	$(CXX) $(CXXFLAGS) $(omake_dep_0_FLAGS) -o $@ $^ $(omake_LIBS)
 
 clean:
 	rm -f $(TARGET) $(omake_OBJS)
